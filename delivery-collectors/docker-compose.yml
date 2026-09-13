@@ -1,0 +1,15 @@
+# docker-compose.yml
+services:
+  scraper:
+    build: .
+    container_name: ssh136-scraper
+    restart: always          # 크래시 또는 PC 재부팅 시 자동 재시작
+    env_file:
+      - .env
+    environment:
+      - PLAYWRIGHT_HEADLESS=true
+      - TZ=Asia/Seoul
+    volumes:
+      - ./logs:/app/logs     # 로그 파일 호스트에 보관
+    # Playwright 가 GUI 없이 실행되도록
+    shm_size: '1gb'          # Chromium 공유 메모리 (부족하면 크래시)
