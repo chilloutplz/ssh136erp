@@ -21,8 +21,8 @@ class Sale(models.Model):
     store_name = models.CharField(max_length=100, blank=True, default="")
 
     # 원본 POS 상 주문 식별자 (matepos: trSeq(int) / tosspos: order id(str))
-    # 동일 source+store_code+order_seq 조합은 유일해야 하며,
-    # 이 유니크 제약이 tosspos 웹훅 재전송(at-least-once)에 대한 멱등성 처리를 담당한다.
+    # MATEPOS trSeq는 영업일별로 반복될 수 있으므로 business_date를
+    # 포함한 조합이 실제 주문 식별자다.
     order_seq = models.CharField(max_length=64)
 
     business_date = models.DateField(null=True, blank=True)
@@ -70,8 +70,8 @@ class Sale(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["source", "store_code", "order_seq"],
-                name="uniq_sale_source_store_orderseq",
+                fields=["source", "store_code", "business_date", "order_seq"],
+                name="uniq_sale_source_store_date_orderseq",
             )
         ]
         indexes = [

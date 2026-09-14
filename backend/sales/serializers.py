@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import Sale, SaleItem, SaleTender
@@ -28,15 +29,23 @@ class SaleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = "__all__"
+        # source + store_code + business_date + order_seq 조합은 create()에서
+        # update_or_create()로 처리하므로 DRF의 사전 유일성 검증을 끈다.
+        # 이 검증을 그대로 두면 create()에 도달하기 전에 기존 주문이
+        # "반드시 고유해야 합니다" 오류로 거부된다.
+        validators = []
 
+    @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
         tenders_data = validated_data.pop("tenders", [])
 
-        # source + store_code + order_seq 기준 upsert (웹훅 재전송 등 멱등 처리)
+        # source + store_code + business_date + order_seq 기준 upsert.
+        # MATEPOS trSeq가 날짜별로 반복되는 경우에도 다른 주문을 덮어쓰지 않는다.
         lookup = {
             "source": validated_data.get("source"),
             "store_code": validated_data.get("store_code"),
+            "business_date": validated_data.get("business_date"),
             "order_seq": validated_data.get("order_seq"),
         }
         sale, _created = Sale.objects.update_or_create(
