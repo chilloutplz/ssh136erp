@@ -1,48 +1,153 @@
 """
 tosspos(토스플레이스) Open API 클라이언트.
-참고: docs.tossplace.com/reference/open-api/common.html, order/order-methods.html
-
-⚠️ 인증 헤더 스킴(Authorization: Bearer 등)은 실제 발급받은 API Key 형식에 맞춰
-   확인 후 조정이 필요합니다. 아래는 문서 상 확인된 엔드포인트 패턴을 기준으로 작성했습니다.
+참고: docs.tossplace.com — Order 목록 조회
+인증: x-access-key + x-secret-key (실측 확인)
+응답: { "resultType": "SUCCESS"|"FAIL", "error": ..., "success": ... }
 """
+from typing import Any, Iterator, Optional
+
 import httpx
 from decouple import config
 
 TOSSPLACE_API_BASE = "https://open-api.tossplace.com/api-public/openapi/v1"
-TOSSPOS_API_KEY = config("TOSSPOS_API_KEY", default="")
+TOSSPOS_ACCESS_KEY = config("TOSSPOS_ACCESS_KEY", default="")
+TOSSPOS_ACCESS_SECRET = config("TOSSPOS_ACCESS_SECRET", default="")
 TOSSPOS_MERCHANT_ID = config("TOSSPOS_MERCHANT_ID", default="")
 
 
+class TossPlaceAPIError(Exception):
+    def __init__(self, message: str, *, status_code: int | None = None, body: Any = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.body = body
+
+
 class TossPlaceClient:
-    def __init__(self, api_key: str = None, merchant_id: str = None):
-        self.api_key = api_key or TOSSPOS_API_KEY
+    def __init__(
+        self,
+        access_key: str | None = None,
+        secret_key: str | None = None,
+        merchant_id: str | None = None,
+    ):
+        self.access_key = access_key or TOSSPOS_ACCESS_KEY
+        self.secret_key = secret_key or TOSSPOS_ACCESS_SECRET
         self.merchant_id = merchant_id or TOSSPOS_MERCHANT_ID
+        if not self.access_key or not self.secret_key:
+            raise ValueError("TOSSPOS_ACCESS_KEY, TOSSPOS_ACCESS_SECRET 이 필요합니다.")
+        if not self.merchant_id:
+            raise ValueError("TOSSPOS_MERCHANT_ID 가 필요합니다.")
+
         self._client = httpx.Client(
             base_url=TOSSPLACE_API_BASE,
-            headers={"Authorization": f"Bearer {self.api_key}"},
+            headers={
+                "x-access-key": self.access_key,
+                "x-secret-key": self.secret_key,
+            },
             timeout=20,
         )
 
-    def list_orders(self, page: int = 1, size: int = 100, sort_order: str = "DESC") -> dict:
+    def _unwrap(self, resp: httpx.Response) -> Any:
+        """HTTP + resultType 검사 후 success 페이로드 반환."""
+        try:
+            body = resp.json()
+        except Exception as e:
+            raise TossPlaceAPIError(
+                f"JSON 파싱 실패: {e}", status_code=resp.status_code, body=resp.text
+            ) from e
+
+        if resp.status_code >= 400:
+            err = (body or {}).get("error") or {}
+            reason = err.get("reason") or resp.text
+            raise TossPlaceAPIError(
+                f"HTTP {resp.status_code}: {reason}",
+                status_code=resp.status_code,
+                body=body,
+            )
+
+        if isinstance(body, dict) and body.get("resultType") == "FAIL":
+            err = body.get("error") or {}
+            reason = err.get("reason") or "unknown"
+            raise TossPlaceAPIError(
+                f"API FAIL: {reason}",
+                status_code=resp.status_code,
+                body=body,
+            )
+
+        if isinstance(body, dict) and "success" in body:
+            return body["success"]
+        return body
+
+    def list_orders(
+        self,
+        page: int = 1,
+        size: int = 100,
+        sort_order: str = "DESC",
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        order_states: list[str] | None = None,
+    ) -> list[dict]:
+        """
+        주문 목록 1페이지.
+        from_ts / to_ts: ISO timestamp (결제 내역 변동 시각 기준, 문서의 from/to)
+        반환: 주문 dict 리스트 (응답의 success 배열)
+        """
+        params: dict[str, Any] = {
+            "page": page,
+            "size": size,
+            "sortOrder": sort_order,
+        }
+        if from_ts:
+            params["from"] = from_ts
+        if to_ts:
+            params["to"] = to_ts
+        if order_states:
+            params["orderStates"] = order_states
+
         resp = self._client.get(
             f"/merchants/{self.merchant_id}/order/orders",
-            params={"page": page, "size": size, "sortOrder": sort_order},
+            params=params,
         )
-        resp.raise_for_status()
-        return resp.json()
+        data = self._unwrap(resp)
+        if data is None:
+            return []
+        if not isinstance(data, list):
+            raise TossPlaceAPIError(
+                f"주문 목록 success 가 list 가 아님: {type(data)}",
+                body=data,
+            )
+        return data
 
-    def iter_all_orders(self, sort_order: str = "ASC"):
-        """전체 주문을 페이지 단위로 순회 (백필용). 실제 응답 필드명은 발급 후 확인 필요."""
+    def iter_all_orders(
+        self,
+        sort_order: str = "ASC",
+        size: int = 100,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        order_states: list[str] | None = None,
+    ) -> Iterator[dict]:
+        """페이지를 돌며 주문을 순회 (백필용)."""
         page = 1
         while True:
-            data = self.list_orders(page=page, size=500, sort_order=sort_order)
-            orders = data.get("orders") or data.get("content") or data.get("data") or []
+            orders = self.list_orders(
+                page=page,
+                size=size,
+                sort_order=sort_order,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                order_states=order_states,
+            )
             if not orders:
                 break
             yield from orders
-            if len(orders) < 500:
+            if len(orders) < size:
                 break
             page += 1
 
     def close(self):
         self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()

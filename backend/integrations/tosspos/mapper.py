@@ -18,6 +18,16 @@ DINING_OPTION_MAP = {
     "DELIVERY": "배달",
 }
 
+PAYMENT_METHOD_NAME_MAP = {
+    "IC": "신용카드",
+    "CARD": "카드",
+    "CASH": "현금",
+    "TRANSFER": "계좌이체",
+    "ACCOUNT_TRANSFER": "계좌이체",
+    "EASY_PAY": "간편결제",
+    "PREPAID": "선결제",
+}
+
 
 def _to_business_date(iso_ts: str | None) -> str | None:
     if not iso_ts:
@@ -103,10 +113,11 @@ def map_line_item(line_item: dict) -> dict:
 
 
 def map_payment(payment: dict, seq: int) -> dict:
+    payment_code = _normalized_payment_code(payment)
     return {
         "tender_seq": seq,
-        "tender_cd": payment.get("paymentMethod", "") or "",
-        "tender_nm": payment.get("paymentMethod", "") or "",
+        "tender_cd": payment_code,
+        "tender_nm": _payment_display_name(payment),
         "tender_amt": int(payment.get("amount") or 0),
         "change_amt": 0,
         "pre_tender_yn": "N",
@@ -123,5 +134,36 @@ def _summarize_payment_method(payments: list) -> str:
         return "복합"
     if methods:
         m = next(iter(methods))
-        return {"CASH": "현금", "CARD": "카드"}.get(m, m)
+        return PAYMENT_METHOD_NAME_MAP.get(m, m)
     return ""
+
+
+def _normalized_payment_code(payment: dict) -> str:
+    """TossPOS 원본 결제 코드를 통합 ERP 결제 코드로 정규화한다."""
+    method = payment.get("paymentMethod") or ""
+    source_type = payment.get("sourceType") or ""
+
+    if source_type == "CARD" or method in {"IC", "CARD"}:
+        return "CARD"
+    if source_type == "CASH" or method == "CASH":
+        return "CASH"
+    if method in {"TRANSFER", "ACCOUNT_TRANSFER"}:
+        return "TRANSFER"
+    if method in {"EASY_PAY", "PREPAID"}:
+        return "EASY_PAY" if method == "EASY_PAY" else "PREPAID"
+    return method
+
+
+def _payment_display_name(payment: dict) -> str:
+    """Admin에 표시할 사람이 읽을 수 있는 결제수단/카드사명."""
+    method = payment.get("paymentMethod") or ""
+    if _normalized_payment_code(payment) == "CARD":
+        card_details = payment.get("cardDetails") or {}
+        settlement = payment.get("settlement") or {}
+        return (
+            card_details.get("acquirer")
+            or settlement.get("settlementSubject")
+            or card_details.get("cardBrand")
+            or "신용카드"
+        )
+    return PAYMENT_METHOD_NAME_MAP.get(method, method)
