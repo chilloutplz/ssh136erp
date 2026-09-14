@@ -199,7 +199,7 @@ def map_sale(detail: dict) -> dict:
         "store_name":           STORE_NAME,
         "business_date":        business_date,
         "sold_at":              sold_at,
-        "order_seq":            int(detail.get("trSeq", 0)),
+        "order_seq":            str(detail.get("trSeq") or ""),
         "channel_order_no":     _nullify(detail.get("displayChannelOrderNo")),
         "order_category":       "온라인" if detail.get("onlineOrderYn") == "Y" else "오프라인",
         "channel":              detail.get("channelCd", "HALL"),
@@ -384,6 +384,11 @@ async def run(start: str, end: str, dry_run: bool = False) -> dict:
                 if not records:
                     continue
 
+                total_records += len(records)
+                # 하루치 금액 합산
+                day_amount = sum(r.get("sale_amount", 0) for r in records)
+                total_amount += day_amount
+                
                 if dry_run:
                     print(f"[MATEPOS] [{day}] dry_run: {len(records)}건 (전송 생략)")
                     continue
@@ -391,10 +396,6 @@ async def run(start: str, end: str, dry_run: bool = False) -> dict:
                 result = await push_to_django(client, records)
                 print(f"[MATEPOS] [{day}] Django: {result}")
 
-                total_records += len(records)
-                # 하루치 금액 합산
-                day_amount = sum(r.get("sale_amount", 0) for r in records)
-                total_amount += day_amount
 
                 await asyncio.sleep(0.5)
 
