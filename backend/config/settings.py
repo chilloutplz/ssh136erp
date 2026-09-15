@@ -32,9 +32,14 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # 프론트엔드(Vue3)가 별도 도메인/포트에서 서빙되므로 CORS 허용 필요.
 # 로컬 개발 기본값은 vite dev 서버(5173), 배포 시 .env 에 실제 frontend 도메인을 넣어줄 것.
 CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS', default='http://localhost:5173', cast=Csv()
+    'CORS_ALLOWED_ORIGINS', 
+    default='http://localhost:5173,http://localhost:3000', 
+    cast=Csv()
 )
 
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_METHODS = ["*"]
 
 # Application definition
 
@@ -70,9 +75,10 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
+
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
