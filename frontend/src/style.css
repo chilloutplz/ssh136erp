@@ -1,0 +1,60 @@
+:root {
+  --paper: #faf6ec;
+  --paper-dim: #f2ecdd;
+  --ink: #22252b;
+  --ink-soft: #45484f;
+  --muted: #746c5e;
+  --rule: #cdc4ab;
+  --rule-strong: #b6ab8c;
+  --stamp: #a63d2f;
+  --stamp-bg: #f4e4e0;
+  --ledger: #3f6b52;
+  --ledger-bg: #e4ece6;
+
+  --font-ui: "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--ledger-bg);
+}
+
+/* 숫자/영수증 느낌 표기 공통 유틸 */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hairline {
+  border: none;
+  border-top: 1px solid var(--rule);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ledger);
+  outline-offset: 2px;
+}

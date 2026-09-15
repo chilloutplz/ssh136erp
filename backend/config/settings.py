@@ -29,6 +29,12 @@ CSRF_TRUSTED_ORIGINS = config(
 # Cloudtype 등 리버스 프록시 뒤에서 HTTPS 인식
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# 프론트엔드(Vue3)가 별도 도메인/포트에서 서빙되므로 CORS 허용 필요.
+# 로컬 개발 기본값은 vite dev 서버(5173), 배포 시 .env 에 실제 frontend 도메인을 넣어줄 것.
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS', default='http://localhost:5173', cast=Csv()
+)
+
 
 # Application definition
 
@@ -40,19 +46,33 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'corsheaders',
     'rest_framework',
+    'rest_framework_simplejwt',
 
     'sales',
     'integrations',
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [],
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+}
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
