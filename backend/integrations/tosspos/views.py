@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
 
 from integrations.models import WebhookEventLog
 from sales.serializers import SaleSerializer
@@ -85,14 +86,19 @@ class TossPosWebhookView(APIView):
     def _dispatch(self, event_type: str, payload: dict):
         data = payload.get("data", {}) or {}
 
+        order = None
         if event_type.startswith("order."):
-            order = data.get("order")
-            if not order:
-                return
-            record = map_order(order, TOSSPOS_STORE_CODE, TOSSPOS_STORE_NAME)
-            serializer = SaleSerializer(data=record)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-        else:
-            # payment.* 등 그 외 이벤트는 우선 로그만 남긴다 (추후 정산 단계에서 확장)
-            logger.info("tosspos webhook 미처리 이벤트 타입: %s", event_type)
+            order = data.get("order") or data
+        elif event_type.startswith("payment."):
+            # payment.approved 같은 선결제 이벤트도 매출로 처리해야 합니다
+            # payload 구조: data.order 또는 data.payment.order 에 주문 정보가 있습니다
+            order = data.get("order") or data.get("payment", {}).get("order") or data
+
+        if not order:
+            logger.info("tosspos webhook 주문 데이터 없음: %s / keys=%s", event_type, list(data.keys()))
+            return
+
+        record = map_order(order, TOSSPOS_STORE_CODE, TOSSPOS_STORE_NAME)
+        serializer = SaleSerializer(data=record)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
