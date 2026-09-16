@@ -20,6 +20,7 @@ const orders = ref([]);
 const loading = ref(true);
 const error = ref("");
 const selectedSaleId = ref(null);
+const dateInput = ref(null);
 
 const isToday = computed(() => selectedDate.value === todayString);
 const todayDay = computed(() => new Date().getDate());
@@ -49,12 +50,29 @@ function shiftDate(days) {
   const d = new Date(`${selectedDate.value}T00:00:00`);
   d.setDate(d.getDate() + days);
   const next = toDateString(d);
-  if (next > todayString) return; // 미래 날짜로는 이동 불가
+  if (next > todayString) return;
   selectedDate.value = next;
 }
 
 function goToday() {
   selectedDate.value = todayString;
+}
+
+/** 모바일/데스크톱에서 달력 팝업 열기 */
+function openDatePicker(e) {
+  e?.preventDefault?.();
+  const el = dateInput.value;
+  if (!el) return;
+  if (typeof el.showPicker === "function") {
+    try {
+      el.showPicker();
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+  el.focus();
+  el.click();
 }
 
 async function loadAll() {
@@ -98,26 +116,37 @@ onMounted(loadAll);
         <h1>매출 정산</h1>
       </div>
       <div class="topbar-right">
-        <button class="ghost" @click="loadAll">새로고침</button>
-        <button class="ghost" @click="handleLogout">로그아웃</button>
+        <button class="ghost" type="button" @click="loadAll">새로고침</button>
+        <button class="ghost" type="button" @click="handleLogout">로그아웃</button>
       </div>
     </header>
 
     <div class="date-nav">
-      <button class="ghost icon" @click="shiftDate(-1)" aria-label="전날">◀</button>
+      <button class="ghost icon" type="button" @click="shiftDate(-1)" aria-label="전날">
+        ◀
+      </button>
 
-      <label class="date-trigger">
+      <button
+        class="date-trigger"
+        type="button"
+        :aria-label="`날짜 선택: ${dateLabel}`"
+        @click="openDatePicker"
+      >
         <span class="date-label">{{ dateLabel }}</span>
         <input
+          ref="dateInput"
           type="date"
-          class="date-input-hidden"
+          class="date-input-overlay"
           v-model="selectedDate"
           :max="todayString"
+          tabindex="-1"
+          @click.stop="openDatePicker"
         />
-      </label>
+      </button>
 
       <button
         class="ghost icon"
+        type="button"
         @click="shiftDate(1)"
         :disabled="isToday"
         aria-label="다음날"
@@ -269,8 +298,16 @@ h1 {
   align-items: center;
   min-width: 0;
   flex: 1;
+  min-height: 36px;
+  padding: 6px 8px;
+  margin: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
   cursor: pointer;
-  padding: 6px 4px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
 .date-label {
@@ -280,17 +317,22 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+  pointer-events: none;
 }
 
-.date-input-hidden {
+/* display:none 금지 — 달력 안 뜸. opacity 0도 일부 모바일에서 클릭 무시 */
+.date-input-overlay {
   position: absolute;
-  inset: 0;
-  opacity: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
-  cursor: pointer;
+  opacity: 0.01;
   border: 0;
   padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-size: 16px;
 }
 
 .today-chip {
