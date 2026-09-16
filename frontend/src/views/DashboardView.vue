@@ -22,6 +22,7 @@ const error = ref("");
 const selectedSaleId = ref(null);
 
 const isToday = computed(() => selectedDate.value === todayString);
+const todayDay = computed(() => new Date().getDate());
 
 const dateLabel = computed(() =>
   new Date(`${selectedDate.value}T00:00:00`).toLocaleDateString("ko-KR", {
@@ -104,13 +105,17 @@ onMounted(loadAll);
 
     <div class="date-nav">
       <button class="ghost icon" @click="shiftDate(-1)" aria-label="전날">◀</button>
-      <input
-        type="date"
-        class="date-input"
-        v-model="selectedDate"
-        :max="todayString"
-      />
-      <span class="date-label">{{ dateLabel }}</span>
+
+      <label class="date-trigger">
+        <span class="date-label">{{ dateLabel }}</span>
+        <input
+          type="date"
+          class="date-input-hidden"
+          v-model="selectedDate"
+          :max="todayString"
+        />
+      </label>
+
       <button
         class="ghost icon"
         @click="shiftDate(1)"
@@ -119,7 +124,16 @@ onMounted(loadAll);
       >
         ▶
       </button>
-      <button v-if="!isToday" class="ghost" @click="goToday">오늘로</button>
+
+      <button
+        v-if="!isToday"
+        class="today-chip"
+        type="button"
+        :aria-label="`${todayDay}일(오늘)로`"
+        @click="goToday"
+      >
+        {{ todayDay }}
+      </button>
     </div>
 
     <div v-if="error" class="banner error">{{ error }}</div>
@@ -230,21 +244,18 @@ h1 {
   gap: 12px;
 }
 
-.date {
-  font-size: 13px;
-  color: var(--muted);
-}
-
 .date-nav {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 20px;
+  min-width: 0;
 }
 
 .date-nav .icon {
   padding: 6px 10px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .date-nav .icon:disabled {
@@ -252,19 +263,53 @@ h1 {
   cursor: default;
 }
 
-.date-input {
-  border: 1px solid var(--rule);
-  background: #fff;
-  padding: 5px 8px;
-  font-size: 13px;
-  color: var(--ink-soft);
-  font-family: var(--font-mono);
+.date-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+  padding: 6px 4px;
 }
 
 .date-label {
   font-size: 14px;
   color: var(--ink-soft);
-  margin-right: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.date-input-hidden {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+
+.today-chip {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.today-chip:hover {
+  border-color: var(--ink-soft);
 }
 
 .ghost {
@@ -427,5 +472,15 @@ h1 {
 .tag.stamp {
   background: var(--stamp-bg);
   color: var(--stamp);
+}
+
+@media (max-width: 480px) {
+  .date-label {
+    font-size: 13px;
+  }
+  .today-chip {
+    width: 30px;
+    height: 30px;
+  }
 }
 </style>

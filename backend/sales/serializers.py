@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import Sale, SaleItem, SaleTender
@@ -28,7 +29,13 @@ class SaleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = "__all__"
+        # source + store_code + business_date + order_seq 조합은 create()에서
+        # update_or_create()로 처리하므로 DRF의 사전 유일성 검증을 끈다.
+        # 이 검증을 그대로 두면 create()에 도달하기 전에 기존 주문이
+        # "반드시 고유해야 합니다" 오류로 거부된다.
+        validators = []
 
+    @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
         tenders_data = validated_data.pop("tenders", [])

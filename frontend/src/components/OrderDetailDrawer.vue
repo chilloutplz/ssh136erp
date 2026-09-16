@@ -34,6 +34,32 @@ watch(
 function formatWon(n) {
   return `₩${Number(n || 0).toLocaleString("ko-KR")}`;
 }
+
+function optionLabel(opt) {
+  if (opt == null) return "";
+  if (typeof opt === "string") return opt;
+  return (
+    opt.title ||
+    opt.name ||
+    opt.label ||
+    opt.optionName ||
+    opt.optionChoice?.title ||
+    opt.optionChoice?.name ||
+    opt.item?.title ||
+    ""
+  );
+}
+
+function optionPrice(opt) {
+  if (opt == null || typeof opt !== "object") return 0;
+  const raw =
+    opt.price ??
+    opt.priceValue ??
+    opt.amount ??
+    opt.itemPrice?.priceValue ??
+    0;
+  return Number(raw) || 0;
+}
 </script>
 
 <template>
@@ -57,10 +83,26 @@ function formatWon(n) {
         <hr class="hairline" />
 
         <ul class="line-items">
-          <li v-for="item in sale.items" :key="item.item_seq">
-            <span class="name">{{ item.goods_nm }} × {{ item.sale_qty }}</span>
-            <span class="leader"></span>
-            <span class="amt mono">{{ formatWon(item.sale_amt) }}</span>
+          <li v-for="(item, idx) in sale.items" :key="item.item_seq ?? idx">
+            <div class="item-block">
+              <div class="item-row">
+                <span class="name">{{ item.goods_nm }} × {{ item.sale_qty }}</span>
+                <span class="leader"></span>
+                <span class="amt mono">{{ formatWon(item.sale_amt) }}</span>
+              </div>
+              <ul
+                v-if="item.item_opt_details?.length"
+                class="options"
+              >
+                <li v-for="(opt, oi) in item.item_opt_details" :key="oi">
+                  <span class="opt-name">+ {{ optionLabel(opt) }}</span>
+                  <span
+                    v-if="optionPrice(opt)"
+                    class="opt-amt mono"
+                  >{{ formatWon(optionPrice(opt)) }}</span>
+                </li>
+              </ul>
+            </div>
           </li>
         </ul>
 
@@ -84,7 +126,7 @@ function formatWon(n) {
         <hr class="hairline" />
 
         <p class="section-label">결제</p>
-        <ul class="line-items">
+        <ul class="line-items tenders">
           <li v-for="t in sale.tenders" :key="t.tender_seq">
             <span class="name">{{ t.tender_nm }}</span>
             <span class="leader"></span>
@@ -185,25 +227,84 @@ h2 {
 }
 
 .line-items li {
+  display: block;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.line-items.tenders li {
   display: flex;
   align-items: baseline;
   gap: 8px;
   padding: 6px 0;
-  font-size: 14px;
 }
 
-.line-items .name {
+.line-items.tenders .name {
   white-space: nowrap;
 }
 
-.line-items .leader {
+.line-items.tenders .leader {
   flex: 1;
   border-bottom: 1px dotted var(--rule-strong);
   transform: translateY(-3px);
 }
 
-.line-items .amt {
+.line-items.tenders .amt {
   white-space: nowrap;
+}
+
+.item-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.item-row .name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-row .leader {
+  flex: 1;
+  border-bottom: 1px dotted var(--rule-strong);
+  transform: translateY(-3px);
+}
+
+.item-row .amt {
+  white-space: nowrap;
+}
+
+.options {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 8px;
+}
+
+.options li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: none;
+}
+
+.opt-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opt-amt {
+  flex-shrink: 0;
 }
 
 .totals .row {
