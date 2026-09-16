@@ -33,10 +33,13 @@ class SaleSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop("items", [])
         tenders_data = validated_data.pop("tenders", [])
 
-        # source + store_code + order_seq 기준 upsert (웹훅 재전송 등 멱등 처리)
+        # source + store_code + business_date + order_seq 기준 upsert.
+        # matepos 의 order_seq(trSeq)는 영업일마다 재사용되므로 business_date가 없으면
+        # 서로 다른 날짜의 주문이 같은 것으로 취급되어 덮어써진다 (DB 유니크 제약과 일치시켜야 함).
         lookup = {
             "source": validated_data.get("source"),
             "store_code": validated_data.get("store_code"),
+            "business_date": validated_data.get("business_date"),
             "order_seq": validated_data.get("order_seq"),
         }
         sale, _created = Sale.objects.update_or_create(
