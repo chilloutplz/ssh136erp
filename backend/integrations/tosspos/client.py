@@ -1,6 +1,6 @@
 """
 tosspos(토스플레이스) Open API 클라이언트.
-참고: docs.tossplace.com — Order 목록 조회
+참고: docs.tossplace.com — Order 목록/단건 조회
 인증: x-access-key + x-secret-key (실측 확인)
 응답: { "resultType": "SUCCESS"|"FAIL", "error": ..., "success": ... }
 """
@@ -113,6 +113,24 @@ class TossPlaceClient:
         if not isinstance(data, list):
             raise TossPlaceAPIError(
                 f"주문 목록 success 가 list 가 아님: {type(data)}",
+                body=data,
+            )
+        return data
+
+    def get_order(self, order_id: str) -> dict:
+        """
+        주문 단건 조회 (추가 주문 반영된 최종 lineItems/chargePrice 포함).
+        GET /merchants/{merchantId}/order/orders/{orderId}
+        """
+        if not order_id:
+            raise ValueError("order_id 가 필요합니다.")
+        resp = self._client.get(
+            f"/merchants/{self.merchant_id}/order/orders/{order_id}",
+        )
+        data = self._unwrap(resp)
+        if not isinstance(data, dict):
+            raise TossPlaceAPIError(
+                f"주문 단건 success 가 dict 가 아님: {type(data)}",
                 body=data,
             )
         return data

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch } from "vue";
 import client from "../api/client";
+import { channelMeta, orderCode } from "../utils/channel";
 
 const props = defineProps({
   saleId: { type: [Number, String], default: null },
@@ -77,8 +78,19 @@ function statusTagClass(status) {
       <div v-else-if="error" class="state error">{{ error }}</div>
 
       <template v-else-if="sale">
-        <p class="eyebrow mono">{{ sale.source }} · {{ sale.order_seq }}</p>
-        <h2>{{ sale.channel || "주문" }} 상세</h2>
+        <p class="eyebrow mono">
+          {{ sale.source }}
+          <template v-if="orderCode(sale.channel_order_no) !== '-'">
+            · {{ orderCode(sale.channel_order_no) }}
+          </template>
+        </p>
+        <h2 class="title-row">
+          <span class="ch-badge" :class="channelMeta(sale.channel).className">
+            <span class="ch-icon">{{ channelMeta(sale.channel).icon }}</span>
+            <span class="ch-text">{{ channelMeta(sale.channel).label }}</span>
+          </span>
+          <span class="title-suffix">상세</span>
+        </h2>
         <p class="meta">
           {{ sale.business_date }} · {{ sale.order_type || "-" }} ·
           <span :class="statusTagClass(sale.payment_status)">
@@ -189,15 +201,68 @@ function statusTagClass(status) {
   color: var(--muted);
 }
 
-h2 {
+.title-row {
   margin: 4px 0 8px;
   font-size: 19px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-suffix {
+  font-weight: 600;
 }
 
 .meta {
   margin: 0;
   font-size: 13px;
   color: var(--muted);
+}
+
+.ch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.ch-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ch-baemin {
+  background: #e8f9f8;
+  color: #0d7370;
+}
+
+.ch-coupang {
+  background: #fff0e8;
+  color: #c44a12;
+}
+
+.ch-yogiyo {
+  background: #fdecef;
+  color: #c2185b;
+}
+
+.ch-table {
+  background: #eef2ff;
+  color: #3f51b5;
+}
+
+.ch-pos {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.ch-etc {
+  background: var(--paper-dim);
+  color: var(--ink-soft);
 }
 
 .tag {

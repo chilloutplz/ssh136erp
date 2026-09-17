@@ -77,6 +77,7 @@ class SaleListSerializer(serializers.ModelSerializer):
             "business_date",
             "sold_at",
             "order_seq",
+            "channel_order_no",
             "order_category",
             "channel",
             "order_type",
