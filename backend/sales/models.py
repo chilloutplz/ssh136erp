@@ -12,6 +12,7 @@ class Sale(models.Model):
         TOSSPOS = "TOSSPOS", "토스포스"
 
     class PaymentStatus(models.TextChoices):
+        PENDING = "진행중", "진행중"
         PAID = "결제완료", "결제완료"
         CANCELLED = "결제취소", "결제취소"
 

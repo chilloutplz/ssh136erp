@@ -53,16 +53,21 @@ def map_order(order: dict, store_code: str, store_name: str = "") -> dict:
         "store_code": store_code,
         "store_name": store_name,
         "order_seq": str(order.get("id")),
-        "business_date": _to_business_date(
-            order.get("completedAt") or order.get("createdAt")
-        ),
+        # createdAt(주문 시작 시각) 기준으로 고정한다. completedAt 을 쓰면
+        # 자정을 넘겨 결제되는 주문의 business_date 가 진행중→결제완료 사이에
+        # 바뀌어버려, upsert 조회 키(business_date 포함)가 어긋나 같은 주문이
+        # 별도 행으로 새로 생기는 문제가 생긴다.
+        "business_date": _to_business_date(order.get("createdAt")),
         "sold_at": order.get("completedAt") or order.get("createdAt"),
         "channel_order_no": order.get("orderNumber"),
         "order_category": "오프라인" if order.get("source") == "POS" else "온라인",
         "channel": order.get("source", ""),
         "channel_detail": "",
         "order_type": DINING_OPTION_MAP.get(dining_option, dining_option or ""),
-        "payment_status": "결제취소" if order_state == "CANCELLED" else "결제완료",
+        "payment_status": {
+            "COMPLETED": "결제완료",
+            "CANCELLED": "결제취소",
+        }.get(order_state, "진행중"),
         "payment_method": _summarize_payment_method(payments),
         "delivery_company": None,
         "sale_amount": int(charge.get("listPrice") or 0),

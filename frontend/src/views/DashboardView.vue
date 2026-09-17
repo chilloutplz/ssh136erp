@@ -38,11 +38,18 @@ function formatWon(n) {
   return `₩${Number(n || 0).toLocaleString("ko-KR")}`;
 }
 
+function statusTagClass(status) {
+  if (status === "결제취소") return "tag stamp";
+  if (status === "진행중") return "tag pending";
+  return "tag ledger";
+}
+
 function formatTime(iso) {
   if (!iso) return "-";
   return new Date(iso).toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }
 
@@ -207,7 +214,7 @@ onMounted(loadAll);
       <table v-else-if="orders.length" class="order-table">
         <thead>
           <tr>
-            <th>시간</th>
+            <th class="col-time">시간</th>
             <th>채널</th>
             <th>결제수단</th>
             <th>상태</th>
@@ -220,11 +227,11 @@ onMounted(loadAll);
             :key="o.id"
             @click="selectedSaleId = o.id"
           >
-            <td class="mono">{{ formatTime(o.sold_at) }}</td>
+            <td class="mono col-time">{{ formatTime(o.sold_at) }}</td>
             <td>{{ o.channel || "-" }}</td>
             <td>{{ o.payment_method || "-" }}</td>
             <td>
-              <span :class="o.payment_status === '결제취소' ? 'tag stamp' : 'tag ledger'">
+              <span :class="statusTagClass(o.payment_status)">
                 {{ o.payment_status }}
               </span>
             </td>
@@ -500,6 +507,11 @@ h1 {
   text-align: right;
 }
 
+.order-table .col-time {
+  width: 52px;
+  white-space: nowrap;
+}
+
 .tag {
   padding: 1px 8px;
   font-size: 12px;
@@ -514,6 +526,12 @@ h1 {
 .tag.stamp {
   background: var(--stamp-bg);
   color: var(--stamp);
+}
+
+.tag.pending {
+  background: var(--paper-dim);
+  color: var(--muted);
+  border: 1px dashed var(--rule-strong);
 }
 
 @media (max-width: 480px) {

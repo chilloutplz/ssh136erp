@@ -60,6 +60,12 @@ function optionPrice(opt) {
     0;
   return Number(raw) || 0;
 }
+
+function statusTagClass(status) {
+  if (status === "결제취소") return "tag stamp";
+  if (status === "진행중") return "tag pending";
+  return "tag ledger";
+}
 </script>
 
 <template>
@@ -75,7 +81,7 @@ function optionPrice(opt) {
         <h2>{{ sale.channel || "주문" }} 상세</h2>
         <p class="meta">
           {{ sale.business_date }} · {{ sale.order_type || "-" }} ·
-          <span :class="sale.payment_status === '결제취소' ? 'tag stamp' : 'tag ledger'">
+          <span :class="statusTagClass(sale.payment_status)">
             {{ sale.payment_status }}
           </span>
         </p>
@@ -208,6 +214,12 @@ h2 {
 .tag.stamp {
   background: var(--stamp-bg);
   color: var(--stamp);
+}
+
+.tag.pending {
+  background: var(--paper-dim);
+  color: var(--muted);
+  border: 1px dashed var(--rule-strong);
 }
 
 .hairline {
