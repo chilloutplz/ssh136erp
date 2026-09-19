@@ -92,14 +92,12 @@ class Purchase(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.UPLOADED)
     parse_error = models.TextField(blank=True, default="")
 
-    # LLM 이 반환한 원본 JSON (검토 화면에서 사람이 고친 내용은 PurchaseItem 에 반영되고,
-    # 여기엔 최초 파싱 결과를 감사(audit) 목적으로 그대로 보관한다).
     raw_llm_response = models.JSONField(null=True, blank=True)
     llm_model = models.CharField(max_length=100, blank=True, default="")
 
-    supply_amount = models.BigIntegerField(default=0)  # 공급가액
-    tax_amount = models.BigIntegerField(default=0)  # 부가세
-    total_amount = models.BigIntegerField(default=0)  # 합계
+    supply_amount = models.BigIntegerField(default=0)
+    tax_amount = models.BigIntegerField(default=0)
+    total_amount = models.BigIntegerField(default=0)
 
     note = models.TextField(blank=True, default="")
 
@@ -124,10 +122,12 @@ class PurchaseItem(models.Model):
     )
 
     sequence = models.IntegerField(default=0)
-    raw_name = models.CharField(max_length=200, blank=True, default="")  # 원본 문서상 품목명
-    spec = models.CharField(max_length=100, blank=True, default="")  # 규격/단위
+    raw_name = models.CharField(max_length=200, blank=True, default="")
+    spec = models.CharField(max_length=100, blank=True, default="")  # 산지/규격 설명
+    unit = models.CharField(max_length=20, blank=True, default="")  # kg, 마리, 박스 등
 
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # 거래명세서 수량이 0.782kg 처럼 소수 3자리인 경우가 있어 3자리까지 저장
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     unit_price = models.BigIntegerField(default=0)
     amount = models.BigIntegerField(default=0)
 
@@ -135,4 +135,5 @@ class PurchaseItem(models.Model):
         ordering = ["sequence"]
 
     def __str__(self):
-        return f"{self.raw_name} x{self.quantity}"
+        u = f" {self.unit}" if self.unit else ""
+        return f"{self.raw_name} x{self.quantity}{u}"

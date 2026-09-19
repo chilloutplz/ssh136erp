@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Material, MaterialAlias, Purchase, PurchaseItem, Supplier
+from .models import Material, Purchase, PurchaseItem, Supplier
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -21,7 +21,7 @@ class PurchaseItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseItem
         fields = [
-            "id", "sequence", "raw_name", "spec",
+            "id", "sequence", "raw_name", "spec", "unit",
             "quantity", "unit_price", "amount",
             "material", "material_name",
         ]
@@ -85,8 +85,11 @@ class PurchaseDetailSerializer(serializers.ModelSerializer):
         if items_data is not None:
             instance.items.all().delete()
             for idx, item in enumerate(items_data):
-                PurchaseItem.objects.create(purchase=instance, sequence=item.get("sequence", idx), **{
-                    k: v for k, v in item.items() if k != "sequence"
-                })
+                data = {k: v for k, v in item.items() if k not in ("sequence", "material_name")}
+                PurchaseItem.objects.create(
+                    purchase=instance,
+                    sequence=item.get("sequence", idx),
+                    **data,
+                )
 
         return instance

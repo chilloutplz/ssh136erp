@@ -2,9 +2,8 @@
 거래명세서(PDF/사진) → LLM(OpenRouter vision 모델) 구조화 파싱.
 
 모델은 .env 의 OPENROUTER_MODEL 로 교체 가능하게 설계했다.
-기본값은 무료 vision 모델(qwen/qwen-2.5-vl-72b-instruct:free) — 공급업체마다
-표 양식이 제각각이라, OCR+텍스트LLM 2단계보다 이미지를 직접 보고 표 구조를
-판단하는 vision 모델 쪽이 더 안정적이라고 판단해 이 방식을 택했다.
+공급업체마다 표 양식이 제각각이라, OCR+텍스트LLM 2단계보다 이미지를 직접 보고
+표 구조를 판단하는 vision 모델 쪽이 더 안정적이라고 판단해 이 방식을 택했다.
 """
 import base64
 import io
@@ -25,16 +24,17 @@ SYSTEM_PROMPT = """당신은 한국 식당의 거래명세서(세금계산서, �
 이미지에 있는 표를 보고 다음 JSON 스키마로만 응답하세요. 다른 설명 텍스트는 절대 포함하지 마세요.
 
 {
-  "supplier_name": "공급업체명 (문서에 있는 그대로)",
+  "supplier_name": "공급업체명 (문서에 있는 그대로, 예: (주)본네이처)",
   "document_date": "YYYY-MM-DD 형식의 거래일자 (알 수 없으면 null)",
-  "document_number": "전표번호/문서번호 (없으면 빈 문자열)",
+  "document_number": "전표번호/일련번호 (없으면 빈 문자열)",
   "items": [
     {
-      "name": "품목명",
-      "spec": "규격/단위 (예: 1kg, 박스, 마리 - 없으면 빈 문자열)",
-      "quantity": 숫자,
+      "name": "품목명 전체 (예: 136참돔회(필렛) [일산])",
+      "spec": "산지/규격 설명만 (예: 일산, 국산, 완도산). 수량·단위 아님",
+      "unit": "수량 단위만 (예: kg, 마리, 박스). 없으면 빈 문자열",
+      "quantity": 숫자 (소수 유지, 예: 0.782 를 0.78 로 줄이지 말 것). 단위 글자는 빼고 숫자만",
       "unit_price": 숫자,
-      "amount": 숫자 (문서에 적힌 금액 그대로)
+      "amount": 숫자 (공급가액/금액 열의 값)
     }
   ],
   "supply_amount": 공급가액 합계 숫자 (없으면 0),
@@ -43,9 +43,23 @@ SYSTEM_PROMPT = """당신은 한국 식당의 거래명세서(세금계산서, �
 }
 
 규칙:
-- 숫자는 콤마/원화기호 없이 순수 숫자로만 (예: 30000, "30,000원" 아님)
+- 숫자는 콤마/원화기호 없이 순수 숫자로만 (예: 69969, "69,969원" 아님)
 - 표에 없는 값은 추측하지 말고 0 또는 빈 문자열/null로 두세요
 - 여러 페이지/여러 표가 있으면 모든 품목을 items 배열 하나에 합치세요
+
+한국 수산물/식자재 거래명세서 표 해석 (중요):
+- 열 이름이 「품목명[규격]」이면 name 에 품목명+괄호+대괄호 산지까지 전부 넣고,
+  spec 에는 [일산]·[국산] 같은 산지/규격만 넣으세요. name 을 "136" 처럼 앞부분만 자르지 마세요.
+- 열 이름이 「수량(단위포함)」이고 셀 값이 "0.782kg" 이면 quantity=0.782 이고,
+  "0.782kg" 전체를 spec 에 넣지 마세요. (spec 은 규격/산지용)
+- 단가·공급가액·금액 열을 unit_price / amount 에 각각 매핑하세요.
+- 예:
+  원문 행: 136참돔회(필렛) [일산] | 0.782kg | 69,969 | 54,716
+  → {"name":"136참돔회(필렛) [일산]","spec":"일산","unit":"kg","quantity":0.782,"unit_price":69969,"amount":54716}
+- "0.782kg" 는 quantity=0.782, unit="kg" 로 분리. 소수 자릿수를 임의로 줄이지 마세요.
+
+- 수량은 이미지에 보이는 숫자를 한 자리도 바꾸지 마세요. 0.782 를 0.78 이나 0.780 으로 만들지 마세요.
+- 수량×단가≈금액 검증만 하고, 수량 자체를 반올림하지 마세요.
 """
 
 
@@ -105,7 +119,15 @@ def parse_document(file_bytes: bytes, content_type: str) -> dict:
     if not settings.OPENROUTER_API_KEY:
         raise LLMParseError("OPENROUTER_API_KEY 가 설정되어 있지 않습니다.")
 
-    if content_type == "application/pdf":
+    model = (settings.OPENROUTER_MODEL or "").strip()
+    if not model:
+        raise LLMParseError(
+            "OPENROUTER_MODEL 이 비어 있습니다. .env 에 vision 모델 id 를 설정하세요."
+        )
+
+    if content_type == "application/pdf" or (
+        content_type and "pdf" in content_type.lower()
+    ):
         page_images = _pdf_to_images(file_bytes)
     else:
         page_images = [file_bytes]
@@ -139,7 +161,7 @@ def parse_document(file_bytes: bytes, content_type: str) -> dict:
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.OPENROUTER_MODEL,
+                "model": model,
                 "messages": messages,
                 "temperature": 0,
             },
@@ -167,5 +189,5 @@ def parse_document(file_bytes: bytes, content_type: str) -> dict:
         raise LLMParseError(f"LLM 응답을 JSON으로 파싱하지 못했습니다: {content[:300]}") from e
 
     parsed["_raw_response"] = content
-    parsed["_model"] = settings.OPENROUTER_MODEL
+    parsed["_model"] = model
     return parsed
