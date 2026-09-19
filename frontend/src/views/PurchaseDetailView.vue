@@ -851,3 +851,44 @@ onMounted(load);
   flex-wrap: wrap;
 }
 </style>
+
+
+<style scoped>
+.page { max-width: 1280px; padding: 32px 32px 64px; }
+.topbar { margin-bottom: 22px; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
+.ghost, .preview-open { border-radius: var(--radius-sm); border-color: var(--rule); background: #fff; color: var(--ink-soft); }
+.ghost:hover { border-color: #93c5fd; color: var(--ledger); background: #f8fbff; }
+.danger-btn { color: var(--stamp); }
+.banner { border-radius: var(--radius-md); padding: 12px 14px; }
+.banner.error { border: 1px solid #fecaca; background: var(--stamp-bg); color: var(--stamp); }
+.banner.ok { border: 1px solid #bbf7d0; background: var(--success-bg); color: var(--success); }
+.preview-block, .form, .preview-body, .item-card {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+.preview-block, .form { padding: 22px; margin-bottom: 20px; }
+.preview-head { padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+.section-title { color: var(--ink); font-size: 15px; font-weight: 700; }
+.preview-body { box-shadow: none; border-radius: var(--radius-md); background: #f8fafc; padding: 14px; }
+.field-row, .row { gap: 16px; }
+label span { color: var(--muted); font-size: 12px; font-weight: 600; }
+input, select, textarea { border: 1px solid var(--rule); border-radius: var(--radius-sm); background: #fff; color: var(--ink); padding: 10px 11px; }
+input:focus, select:focus, textarea:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,.14); outline: none; }
+input:disabled, select:disabled { background: #f8fafc; color: var(--muted); }
+.item-card { box-shadow: none; border-radius: var(--radius-md); padding: 16px; }
+.item-card + .item-card { margin-top: 12px; }
+.item-card-head { color: var(--muted); }
+.item-idx { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 999px; background: var(--ledger-bg); color: var(--ledger); font-size: 12px; font-weight: 700; }
+.link { color: var(--ledger); }
+.link.danger { color: var(--stamp); }
+@media (max-width: 720px) {
+  .page { padding: 22px 16px 48px; }
+  .topbar { align-items: flex-start; gap: 12px; }
+  h1 { font-size: 23px; }
+  .preview-block, .form { padding: 16px; border-radius: var(--radius-md); }
+  .field-row, .row { gap: 10px; }
+}
+</style>

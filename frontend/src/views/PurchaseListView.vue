@@ -234,3 +234,36 @@ h1 {
   border: 1px dashed var(--rule-strong);
 }
 </style>
+
+
+<style scoped>
+.page { max-width: 1280px; padding: 32px 32px 64px; }
+.topbar { margin-bottom: 22px; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
+.primary {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--ledger);
+  color: #fff;
+  padding: 10px 16px;
+  box-shadow: 0 4px 10px rgba(37,99,235,.18);
+}
+.primary:hover:not(:disabled) { background: #1d4ed8; }
+.banner.error { border: 1px solid #fecaca; border-radius: var(--radius-md); background: var(--stamp-bg); padding: 12px 14px; }
+.list-section { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-card); padding: 8px; }
+.purchase-table { border-radius: var(--radius-md); overflow: hidden; }
+.purchase-table th { background: #f8fafc; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 13px 14px; border-bottom: 1px solid var(--rule); }
+.purchase-table td { padding: 15px 14px; border-bottom: 1px solid #eef2f7; color: var(--ink-soft); }
+.purchase-table tbody tr:hover { background: #f8fbff; }
+.tag { border: 0; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700; }
+.tag.ledger { background: var(--success-bg); color: var(--success); }
+.tag.stamp { background: var(--stamp-bg); color: var(--stamp); }
+.tag.pending { border: 0; background: var(--warning-bg); color: var(--warning); }
+@media (max-width: 720px) {
+  .page { padding: 22px 16px 48px; }
+  .topbar { align-items: flex-start; gap: 12px; }
+  h1 { font-size: 23px; }
+  .list-section { padding: 5px; }
+  .purchase-table { min-width: 680px; }
+}
+</style>

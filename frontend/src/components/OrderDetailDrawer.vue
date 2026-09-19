@@ -399,3 +399,24 @@ function statusTagClass(status) {
   padding-top: 8px;
 }
 </style>
+
+
+<style scoped>
+.backdrop { background: rgba(15,23,42,.48); backdrop-filter: blur(2px); }
+.drawer { max-width: 460px; background: #fff; border-left: 1px solid var(--rule); padding: 24px; box-shadow: -12px 0 30px rgba(15,23,42,.12); }
+.close { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: var(--radius-sm); background: #f8fafc; color: var(--ink-soft); }
+.close:hover { background: #eff6ff; color: var(--ledger); }
+.title-row { font-size: 22px; }
+.meta { color: var(--muted); }
+.hairline { margin: 20px 0; }
+.line-items li { padding: 11px 0; }
+.item-row .name, .line-items.tenders .name { color: var(--ink-soft); }
+.item-row .leader, .line-items.tenders .leader { border-bottom-color: #cbd5e1; }
+.totals { border-radius: var(--radius-md); background: #f8fafc; padding: 14px; }
+.totals .row { padding: 5px 0; color: var(--ink-soft); }
+.totals .row.total { color: var(--ink); font-size: 17px; font-weight: 750; }
+.tag { border: 0; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700; }
+.tag.ledger { background: var(--success-bg); color: var(--success); }
+.tag.stamp { background: var(--stamp-bg); color: var(--stamp); }
+.tag.pending { border: 0; background: var(--warning-bg); color: var(--warning); }
+</style>
