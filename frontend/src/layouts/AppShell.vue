@@ -1,6 +1,6 @@
 <script setup>
 import { useRouter } from "vue-router";
-import { logout } from "../stores/auth";
+import { authState, logout } from "../stores/auth";
 
 const router = useRouter();
 
@@ -35,7 +35,11 @@ function handleLogout() {
         </router-link>
       </nav>
 
-      <button class="logout" @click="handleLogout">로그아웃</button>
+      <div class="account-box">
+        <p class="account-label">로그인 계정</p>
+        <p class="account-name" :title="authState.username">{{ authState.username }}</p>
+        <button class="logout" type="button" @click="handleLogout">로그아웃</button>
+      </div>
     </aside>
 
     <main class="content">
@@ -104,8 +108,31 @@ function handleLogout() {
   background: var(--paper-dim);
 }
 
-.logout {
+.account-box {
   margin: 12px 20px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--paper-dim);
+}
+
+.account-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.account-name {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout {
+  width: 100%;
+  margin: 10px 0 0;
   padding: 8px 0;
   background: none;
   border: 1px solid var(--rule);
@@ -163,8 +190,26 @@ function handleLogout() {
     border-bottom-color: var(--ledger);
   }
 
-  .logout {
+  .account-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0 0 0 auto;
+    padding: 0;
+    border-top: none;
+  }
+
+  .account-label {
+    display: none;
+  }
+
+  .account-name {
+    max-width: 120px;
+  }
+
+  .logout {
+    width: auto;
+    margin: 0;
     white-space: nowrap;
   }
 }

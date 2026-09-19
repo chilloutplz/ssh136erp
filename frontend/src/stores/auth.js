@@ -4,9 +4,11 @@ import axios from "axios";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 const STORAGE_KEY = "ssh136erp.tokens";
+const ACCOUNT_KEY = "ssh136erp.account";
 
 export const authState = reactive({
   isAuthenticated: !!localStorage.getItem(STORAGE_KEY),
+  username: localStorage.getItem(ACCOUNT_KEY) || "관리자",
 });
 
 let refreshing = null;
@@ -18,12 +20,18 @@ export function getTokens() {
 
 export function setTokens(tokens) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
+  if (tokens.username) {
+    localStorage.setItem(ACCOUNT_KEY, tokens.username);
+    authState.username = tokens.username;
+  }
   authState.isAuthenticated = true;
 }
 
 export function clearTokens() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(ACCOUNT_KEY);
   authState.isAuthenticated = false;
+  authState.username = "관리자";
 }
 
 function isExpiredOrExpiring(token, marginSeconds = 30) {
@@ -47,7 +55,11 @@ export async function refreshAccessToken() {
     refreshing = axios
       .post(`${API_BASE_URL}/auth/token/refresh/`, { refresh })
       .then(({ data }) => {
-        setTokens({ access: data.access, refresh });
+        setTokens({
+          access: data.access,
+          refresh,
+          username: getTokens().username,
+        });
         return data.access;
       })
       .finally(() => {
@@ -62,7 +74,7 @@ export async function login(username, password) {
     username,
     password,
   });
-  setTokens({ access: data.access, refresh: data.refresh });
+  setTokens({ access: data.access, refresh: data.refresh, username });
 }
 
 export function logout() {
