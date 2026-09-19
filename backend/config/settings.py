@@ -57,6 +57,7 @@ INSTALLED_APPS = [
 
     'sales',
     'integrations',
+    'purchases',
 ]
 
 REST_FRAMEWORK = {
@@ -176,6 +177,16 @@ STORAGES = {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
+
+# 매입 전표 원본 파일(PDF/사진) 업로드 저장 위치.
+# ⚠️ cloudtype 등 컨테이너 배포 환경은 로컬 파일시스템이 재배포 시 초기화될 수 있으므로,
+#    실사용 단계에서는 S3/Cloudflare R2 등 오브젝트 스토리지로 교체를 고려할 것.
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# 매입 전표 파싱용 LLM (OpenRouter)
+OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
+OPENROUTER_MODEL = config('OPENROUTER_MODEL', default='qwen/qwen-2.5-vl-72b-instruct:free')
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration

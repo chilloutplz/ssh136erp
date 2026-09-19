@@ -1,15 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import client from "../api/client";
-import { logout } from "../stores/auth";
-import { useRouter } from "vue-router";
 import OrderDetailDrawer from "../components/OrderDetailDrawer.vue";
-import { channelMeta, orderCode } from "../utils/channel";
-
-const router = useRouter();
 
 function toDateString(d) {
-  return d.toLocaleDateString("sv-SE");
+  return d.toLocaleDateString("sv-SE"); // YYYY-MM-DD, 로컬 타임존 기준
 }
 
 const todayString = toDateString(new Date());
@@ -25,16 +20,6 @@ const dateInput = ref(null);
 
 const isToday = computed(() => selectedDate.value === todayString);
 const todayDay = computed(() => new Date().getDate());
-
-const paidCount = computed(
-  () => orders.value.filter((o) => o.payment_status === "결제완료").length
-);
-const cancelledCount = computed(
-  () => orders.value.filter((o) => o.payment_status === "결제취소").length
-);
-const pendingCount = computed(
-  () => orders.value.filter((o) => o.payment_status === "진행중").length
-);
 
 const dateLabel = computed(() =>
   new Date(`${selectedDate.value}T00:00:00`).toLocaleDateString("ko-KR", {
@@ -76,6 +61,7 @@ function goToday() {
   selectedDate.value = todayString;
 }
 
+/** 모바일/데스크톱에서 달력 팝업 열기 */
 function openDatePicker(e) {
   e?.preventDefault?.();
   const el = dateInput.value;
@@ -85,7 +71,7 @@ function openDatePicker(e) {
       el.showPicker();
       return;
     } catch {
-      /* fallback */
+      // fallback below
     }
   }
   el.focus();
@@ -116,11 +102,6 @@ async function loadAll() {
   }
 }
 
-function handleLogout() {
-  logout();
-  router.push({ name: "login" });
-}
-
 watch(selectedDate, loadAll);
 onMounted(loadAll);
 </script>
@@ -129,17 +110,17 @@ onMounted(loadAll);
   <div class="page">
     <header class="topbar">
       <div>
-        <p class="eyebrow mono">ssh136erp</p>
         <h1>매출 정산</h1>
       </div>
       <div class="topbar-right">
         <button class="ghost" type="button" @click="loadAll">새로고침</button>
-        <button class="ghost" type="button" @click="handleLogout">로그아웃</button>
       </div>
     </header>
 
     <div class="date-nav">
-      <button class="ghost icon" type="button" @click="shiftDate(-1)" aria-label="전날">◀</button>
+      <button class="ghost icon" type="button" @click="shiftDate(-1)" aria-label="전날">
+        ◀
+      </button>
 
       <button
         class="date-trigger"
@@ -207,13 +188,7 @@ onMounted(loadAll);
       <p class="section-title">채널별</p>
       <ul v-if="channels.length" class="line-items">
         <li v-for="c in channels" :key="c.channel">
-          <span class="name channel-line">
-            <span class="ch-badge" :class="channelMeta(c.channel).className">
-              <span class="ch-icon">{{ channelMeta(c.channel).icon }}</span>
-              <span class="ch-text">{{ channelMeta(c.channel).label }}</span>
-            </span>
-            <span class="ch-count">{{ c.order_count }}건</span>
-          </span>
+          <span class="name">{{ c.channel || "미지정" }} · {{ c.order_count }}건</span>
           <span class="leader"></span>
           <span class="amt mono">{{ formatWon(c.net_sale_amount) }}</span>
         </li>
@@ -222,24 +197,14 @@ onMounted(loadAll);
     </section>
 
     <section class="orders">
-      <p class="section-title">
-        주문 목록
-        <span class="count-parts">
-          <span v-if="paidCount">결제완료 {{ paidCount }}</span>
-          <span v-if="cancelledCount">취소 {{ cancelledCount }}</span>
-          <span v-if="pendingCount">진행중 {{ pendingCount }}</span>
-          <span v-if="!orders.length">0건</span>
-        </span>
-      </p>
+      <p class="section-title">주문 목록 ({{ orders.length }}건)</p>
 
       <div v-if="loading" class="empty">불러오는 중...</div>
       <table v-else-if="orders.length" class="order-table">
         <thead>
           <tr>
             <th class="col-time">시간</th>
-            <th class="col-ch">채널</th>
-            <th class="col-type">유형</th>
-            <th class="col-code">주문번호</th>
+            <th>채널</th>
             <th>결제수단</th>
             <th>상태</th>
             <th class="right">실매출</th>
@@ -252,14 +217,7 @@ onMounted(loadAll);
             @click="selectedSaleId = o.id"
           >
             <td class="mono col-time">{{ formatTime(o.sold_at) }}</td>
-            <td class="col-ch">
-              <span class="ch-badge" :class="channelMeta(o.channel).className" :title="o.channel">
-                <span class="ch-icon">{{ channelMeta(o.channel).icon }}</span>
-                <span class="ch-text">{{ channelMeta(o.channel).label }}</span>
-              </span>
-            </td>
-            <td class="col-type">{{ o.order_type || "-" }}</td>
-            <td class="mono col-code">{{ orderCode(o.channel_order_no) }}</td>
+            <td>{{ o.channel || "-" }}</td>
             <td>{{ o.payment_method || "-" }}</td>
             <td>
               <span :class="statusTagClass(o.payment_status)">
@@ -358,6 +316,7 @@ h1 {
   pointer-events: none;
 }
 
+/* display:none 금지 — 달력 안 뜸. opacity 0도 일부 모바일에서 클릭 무시 */
 .date-input-overlay {
   position: absolute;
   left: 0;
@@ -462,27 +421,6 @@ h1 {
   font-size: 13px;
   color: var(--muted);
   margin: 0 0 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.count-parts {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.count-parts span::after {
-  content: "";
-}
-
-.count-parts span:not(:last-child)::after {
-  content: "·";
-  margin-left: 8px;
-  color: var(--rule-strong);
 }
 
 .channels {
@@ -509,17 +447,6 @@ h1 {
   color: var(--ink-soft);
 }
 
-.channel-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ch-count {
-  font-size: 13px;
-  color: var(--muted);
-}
-
 .line-items .leader {
   flex: 1;
   border-bottom: 1px dotted var(--rule-strong);
@@ -528,60 +455,6 @@ h1 {
 
 .line-items .amt {
   white-space: nowrap;
-}
-
-/* 채널 뱃지 */
-.ch-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px 2px 6px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.3;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.ch-icon {
-  font-size: 13px;
-  line-height: 1;
-}
-
-.ch-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ch-baemin {
-  background: #e8f9f8;
-  color: #0d7370;
-}
-
-.ch-coupang {
-  background: #fff0e8;
-  color: #c44a12;
-}
-
-.ch-yogiyo {
-  background: #fdecef;
-  color: #c2185b;
-}
-
-.ch-table {
-  background: #eef2ff;
-  color: #3f51b5;
-}
-
-.ch-pos {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.ch-etc {
-  background: var(--paper-dim);
-  color: var(--ink-soft);
 }
 
 .empty {
@@ -608,7 +481,6 @@ h1 {
 .order-table td {
   padding: 10px 6px;
   border-bottom: 1px solid var(--paper-dim);
-  vertical-align: middle;
 }
 
 .order-table tbody tr {
@@ -627,25 +499,6 @@ h1 {
 .order-table .col-time {
   width: 52px;
   white-space: nowrap;
-}
-
-.order-table .col-ch {
-  width: 1%;
-  white-space: nowrap;
-}
-
-.order-table .col-type {
-  width: 1%;
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.order-table .col-code {
-  width: 1%;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .tag {
@@ -677,11 +530,6 @@ h1 {
   .today-chip {
     width: 30px;
     height: 30px;
-  }
-  .ch-text {
-    /* 모바일 테이블: 아이콘만 보이게 하려면 주석 해제
-    display: none;
-    */
   }
 }
 </style>
