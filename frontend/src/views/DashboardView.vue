@@ -102,6 +102,19 @@ async function loadAll() {
   }
 }
 
+async function refreshDashboard() {
+  loading.value = true;
+  error.value = "";
+  let syncError = "";
+  try {
+    await client.post("/integrations/tosspos/sync-pending/");
+  } catch (e) {
+    syncError = "진행 중 주문 동기화에 실패했습니다. 잠시 후 다시 시도해주세요.";
+  }
+  await loadAll();
+  if (syncError) error.value = syncError;
+}
+
 watch(selectedDate, loadAll);
 onMounted(loadAll);
 </script>
@@ -113,7 +126,7 @@ onMounted(loadAll);
         <h1>매출 정산</h1>
       </div>
       <div class="topbar-right">
-        <button class="ghost" type="button" @click="loadAll">새로고침</button>
+        <button class="ghost" type="button" @click="refreshDashboard">새로고침</button>
       </div>
     </header>
 

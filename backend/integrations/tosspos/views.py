@@ -1,19 +1,20 @@
 import json
 import logging
 
-from django.db.models import Sum
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import JSONParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import WebhookEventLog
-from sales.models import Sale, SaleTender
+from sales.models import Sale
 from sales.serializers import SaleSerializer
 
 from .client import TossPlaceAPIError, TossPlaceClient
-from .mapper import map_order, map_payment
+from .mapper import map_order
 from .security import SignatureVerificationError, verify_tossplace_signature
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,10 @@ class TossPosWebhookView(APIView):
         logger.info("tosspos webhook: opened API 조회 반영 order_id=%s", order_id)
         return True
 
+    def _sync_order_or_raise(self, order_id) -> None:
+        if not self._fetch_and_save_order(order_id):
+            raise TossPlaceAPIError(f"주문 동기화 실패 order_id={order_id}")
+
     def _find_sale(self, order_id):
         if not order_id:
             return None
@@ -145,7 +150,11 @@ class TossPosWebhookView(APIView):
 
         # 추가 주문 등 opened → 품목 재조회
         if event_type.endswith("opened.v1"):
-            self._fetch_and_save_order(order_id)
+            self._sync_order_or_raise(order_id)
+            return
+
+        if event_type.endswith("completed.v1"):
+            self._sync_order_or_raise(order_id)
             return
 
         sale = self._find_sale(order_id)
@@ -157,10 +166,7 @@ class TossPosWebhookView(APIView):
             )
             return
 
-        if event_type.endswith("completed.v1"):
-            sale.payment_status = Sale.PaymentStatus.PAID
-            sale.sold_at = data.get("completedAt") or sale.sold_at
-        elif event_type.endswith("cancelled.v1"):
+        if event_type.endswith("cancelled.v1"):
             sale.payment_status = Sale.PaymentStatus.CANCELLED
         else:
             logger.info("tosspos webhook: 처리하지 않는 슬림 이벤트 - %s", event_type)
@@ -170,44 +176,37 @@ class TossPosWebhookView(APIView):
 
     def _sync_payment(self, payment: dict) -> None:
         order_id = payment.get("orderId")
-        sale = self._find_sale(order_id)
-        if not sale:
-            logger.warning(
-                "tosspos webhook: payment 이벤트의 원주문을 찾지 못함 order_id=%s",
-                order_id,
-            )
-            return
+        # payment payload만 갱신하지 않고 전체 주문을 다시 조회한다.
+        # 결제 직전에 발생한 추가 품목과 최종 chargePrice를 함께 반영한다.
+        self._sync_order_or_raise(order_id)
 
-        tender_data = map_payment(payment, seq=sale.tenders.count() + 1)
-        approval_no = tender_data.get("approval_no")
-        existing = sale.tenders.filter(approval_no=approval_no).first() if approval_no else None
-        if existing:
-            for field, value in tender_data.items():
-                setattr(existing, field, value)
-            existing.save()
-        else:
-            SaleTender.objects.create(sale=sale, **tender_data)
 
-        total_amt = (
-            sale.tenders.exclude(return_yn="Y").aggregate(total=Sum("tender_amt"))["total"]
-            or 0
-        )
-        sale.sale_amount = total_amt
-        sale.net_sale_amount = total_amt
-        sale.actual_sale_amount = total_amt
-        sale.taxable_amount = int(payment.get("supplyAmount") or sale.taxable_amount)
-        sale.vat = int(payment.get("taxAmount") or sale.vat)
-        sale.non_taxable_amount = int(payment.get("taxExemptAmount") or sale.non_taxable_amount)
-        sale.payment_method = tender_data.get("tender_nm") or sale.payment_method
-        sale.save(
-            update_fields=[
-                "sale_amount",
-                "net_sale_amount",
-                "actual_sale_amount",
-                "taxable_amount",
-                "vat",
-                "non_taxable_amount",
-                "payment_method",
-                "updated_at",
-            ]
+class TossPosPendingSyncView(APIView):
+    """진행 중인 TossPOS 내점 주문을 최신 전체 주문으로 동기화한다."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        pending_sales = Sale.objects.filter(
+            source=Sale.Source.TOSSPOS,
+            store_code=TOSSPOS_STORE_CODE,
+            payment_status=Sale.PaymentStatus.PENDING,
+        ).filter(Q(order_type="내점") | Q(channel__in=["TABLE_ORDER", "POS"]))
+
+        synced = 0
+        errors = []
+        sync_view = TossPosWebhookView()
+        for sale in pending_sales.iterator():
+            try:
+                sync_view._sync_order_or_raise(sale.order_seq)
+                synced += 1
+            except Exception as exc:
+                logger.exception(
+                    "tosspos pending 동기화 실패 order_id=%s", sale.order_seq
+                )
+                errors.append({"order_id": sale.order_seq, "error": str(exc)})
+
+        return Response(
+            {"requested": synced + len(errors), "synced": synced, "errors": errors},
+            status=status.HTTP_207_MULTI_STATUS if errors else status.HTTP_200_OK,
         )
