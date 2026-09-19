@@ -1,8 +1,11 @@
 <script setup>
-import { useRouter } from "vue-router";
+import { ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { authState, logout } from "../stores/auth";
 
 const router = useRouter();
+const route = useRoute();
+const sidebarOpen = ref(false);
 
 const navItems = [
   { name: "sales", label: "매출 정산", path: "/sales" },
@@ -13,11 +16,23 @@ function handleLogout() {
   logout();
   router.push({ name: "login" });
 }
+
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value;
+}
+
+function closeSidebar() {
+  sidebarOpen.value = false;
+}
+
+watch(() => route.fullPath, closeSidebar);
 </script>
 
 <template>
   <div class="shell">
-    <aside class="sidebar">
+    <div v-if="sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
+
+    <aside class="sidebar" :class="{ open: sidebarOpen }" @click.stop>
       <div class="brand">
         <p class="eyebrow mono">ssh136erp</p>
         <p class="brand-sub">숙성회136</p>
@@ -43,6 +58,21 @@ function handleLogout() {
     </aside>
 
     <main class="content">
+      <header class="mobile-header">
+        <button
+          class="menu-toggle"
+          type="button"
+          :aria-expanded="sidebarOpen"
+          aria-label="메뉴 열기"
+          @click="toggleSidebar"
+        >
+          <span></span><span></span><span></span>
+        </button>
+        <div>
+          <strong>숙성회136</strong>
+          <small>ssh136erp</small>
+        </div>
+      </header>
       <router-view />
     </main>
   </div>
@@ -268,5 +298,74 @@ function handleLogout() {
   .account-box { margin-top: 8px; }
   .nav { gap: 2px; }
   .nav-item { padding: 8px 10px; }
+}
+</style>
+
+
+<style scoped>
+.mobile-header { display: none; }
+
+@media (max-width: 640px) {
+  .shell { display: block; min-height: 100vh; }
+  .mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 62px;
+    padding: 0 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--rule);
+    box-shadow: 0 1px 3px rgba(15,23,42,.04);
+  }
+  .mobile-header strong { display: block; color: var(--ink); font-size: 15px; }
+  .mobile-header small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; letter-spacing: .08em; }
+  .menu-toggle {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    cursor: pointer;
+  }
+  .menu-toggle span { display: block; width: 18px; height: 2px; border-radius: 2px; background: var(--ink-soft); }
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(15,23,42,.48);
+    backdrop-filter: blur(2px);
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    display: flex;
+    width: min(82vw, 280px);
+    height: 100vh;
+    padding: 24px 14px 18px;
+    transform: translateX(-105%);
+    transition: transform .22s ease;
+    box-shadow: 12px 0 30px rgba(15,23,42,.16);
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .brand { padding: 4px 12px 20px; margin-bottom: 20px; white-space: normal; }
+  .nav { display: flex; flex-direction: column; flex: 1; }
+  .nav-item { white-space: normal; padding: 11px 12px; }
+  .account-box { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+  .account-label { display: block; }
+  .account-name { max-width: none; }
+  .logout { width: 100%; margin-top: 10px; }
+  .content { width: 100%; min-height: 100vh; overflow-x: hidden; }
 }
 </style>
