@@ -1,13 +1,18 @@
 <script setup>
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { login } from "../stores/auth";
 
 const router = useRouter();
 const username = ref("");
 const password = ref("");
+const usernameInput = ref(null);
 const error = ref("");
 const loading = ref(false);
+
+onMounted(() => {
+  usernameInput.value?.focus();
+});
 
 async function handleSubmit() {
   error.value = "";
@@ -34,7 +39,13 @@ async function handleSubmit() {
 
       <label>
         <span>아이디</span>
-        <input v-model="username" type="text" autocomplete="username" required />
+        <input
+          ref="usernameInput"
+          v-model="username"
+          type="text"
+          autocomplete="username"
+          required
+        />
       </label>
       <label>
         <span>비밀번호</span>

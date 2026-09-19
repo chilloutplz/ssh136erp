@@ -21,6 +21,11 @@ function handleLogout() {
       <div class="brand">
         <p class="eyebrow mono">ssh136erp</p>
         <p class="brand-sub">숙성회136</p>
+        <div class="account-box">
+          <p class="account-label">로그인 계정</p>
+          <p class="account-name" :title="authState.username">{{ authState.username }}</p>
+          <button class="logout" type="button" @click="handleLogout">로그아웃</button>
+        </div>
       </div>
 
       <nav class="nav">
@@ -35,11 +40,6 @@ function handleLogout() {
         </router-link>
       </nav>
 
-      <div class="account-box">
-        <p class="account-label">로그인 계정</p>
-        <p class="account-name" :title="authState.username">{{ authState.username }}</p>
-        <button class="logout" type="button" @click="handleLogout">로그아웃</button>
-      </div>
     </aside>
 
     <main class="content">
@@ -109,8 +109,8 @@ function handleLogout() {
 }
 
 .account-box {
-  margin: 12px 20px 0;
-  padding-top: 14px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--paper-dim);
 }
 
@@ -194,7 +194,7 @@ function handleLogout() {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0 0 0 auto;
+    margin-top: 10px;
     padding: 0;
     border-top: none;
   }
