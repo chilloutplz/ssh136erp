@@ -1,41 +1,49 @@
 import axios from "axios";
-import { getTokens, setTokens, clearTokens } from "../stores/auth";
+import {
+  getTokens,
+  clearTokens,
+  accessTokenNeedsRefresh,
+  refreshAccessToken,
+} from "../stores/auth";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 const client = axios.create({ baseURL: API_BASE_URL });
 
-client.interceptors.request.use((config) => {
-  const { access } = getTokens();
+client.interceptors.request.use(async (config) => {
+  let { access } = getTokens();
+  if (accessTokenNeedsRefresh(access)) {
+    try {
+      access = await refreshAccessToken();
+    } catch {
+      clearTokens();
+      window.location.href = "/login";
+      return Promise.reject(new Error("로그인이 만료되었습니다."));
+    }
+  }
   if (access) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${access}`;
   }
   return config;
 });
 
-let refreshing = null;
-
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    const { refresh } = getTokens();
 
-    if (error.response?.status === 401 && refresh && !original._retried) {
+    if (error.response?.status === 401 && original && !original._retried) {
       original._retried = true;
       try {
-        refreshing =
-          refreshing ||
-          axios.post(`${API_BASE_URL}/auth/token/refresh/`, { refresh });
-        const { data } = await refreshing;
-        refreshing = null;
-        setTokens({ access: data.access, refresh });
-        original.headers.Authorization = `Bearer ${data.access}`;
+        const access = await refreshAccessToken();
+        original.headers = original.headers || {};
+        original.headers.Authorization = `Bearer ${access}`;
         return client(original);
       } catch (e) {
-        refreshing = null;
         clearTokens();
         window.location.href = "/login";
+        return Promise.reject(e);
       }
     }
     return Promise.reject(error);
