@@ -1,6 +1,6 @@
 from datetime import date
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -112,8 +112,17 @@ class SaleTodaySummaryView(APIView):
             net_sale_amount=Sum("net_sale_amount"),
             actual_sale_amount=Sum("actual_sale_amount"),
             order_count=Count("id"),
+            discount_amount=Sum("discount_amount"),
+            discount_order_count=Count("id", filter=Q(discount_amount__gt=0)),
         )
-        for key in ("sale_amount", "net_sale_amount", "actual_sale_amount", "order_count"):
+        for key in (
+            "sale_amount",
+            "net_sale_amount",
+            "actual_sale_amount",
+            "order_count",
+            "discount_amount",
+            "discount_order_count",
+        ):
             agg[key] = agg[key] or 0
         agg["date"] = target_date
         return Response(agg)

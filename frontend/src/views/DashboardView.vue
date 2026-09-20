@@ -213,6 +213,10 @@ onMounted(loadAll);
           <span class="label">매출액</span>
           <span class="mono">{{ formatWon(today?.sale_amount) }}</span>
         </div>
+        <div>
+          <span class="label">할인</span>
+          <span class="mono">{{ today?.discount_order_count ?? 0 }}건 · {{ formatWon(today?.discount_amount) }}</span>
+        </div>
       </div>
       <div class="business-summary">
         <div v-for="group in businessChannels" :key="group.channel" class="business-card">
