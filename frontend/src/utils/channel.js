@@ -23,6 +23,13 @@ export function channelLabel(raw) {
   return channelMeta(raw).label;
 }
 
+export function businessType(raw) {
+  const value = String(raw || "").toUpperCase();
+  if (value === "POS" || value === "TABLE_ORDER") return "내점";
+  if (value.startsWith("PLUGIN_")) return "배달";
+  return "기타";
+}
+
 /**
  * orderNumber / channel_order_no 에서 플랫폼명 제거 후 코드만.
  * 예: "배달의민족 T2GD0000RMUV" → "T2GD0000RMUV"

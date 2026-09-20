@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import client from "../api/client";
 import OrderDetailDrawer from "../components/OrderDetailDrawer.vue";
+import { businessType, channelLabel } from "../utils/channel";
 
 function toDateString(d) {
   return d.toLocaleDateString("sv-SE"); // YYYY-MM-DD, 로컬 타임존 기준
@@ -20,6 +21,28 @@ const dateInput = ref(null);
 
 const isToday = computed(() => selectedDate.value === todayString);
 const todayDay = computed(() => new Date().getDate());
+const businessChannels = computed(() => {
+  const groups = new Map();
+  for (const row of channels.value) {
+    const type = businessType(row.channel);
+    const current = groups.get(type) || {
+      channel: type,
+      sale_amount: 0,
+      net_sale_amount: 0,
+      order_count: 0,
+    };
+    current.sale_amount += Number(row.sale_amount || 0);
+    current.net_sale_amount += Number(row.net_sale_amount || 0);
+    current.order_count += Number(row.order_count || 0);
+    groups.set(type, current);
+  }
+  return ["내점", "배달", "기타"].map((type) => groups.get(type) || {
+    channel: type,
+    sale_amount: 0,
+    net_sale_amount: 0,
+    order_count: 0,
+  });
+});
 
 const dateLabel = computed(() =>
   new Date(`${selectedDate.value}T00:00:00`).toLocaleDateString("ko-KR", {
@@ -197,11 +220,19 @@ onMounted(loadAll);
       </div>
     </section>
 
+    <section class="business-summary">
+      <div v-for="group in businessChannels" :key="group.channel" class="business-card">
+        <span class="business-label">{{ group.channel }}</span>
+        <strong class="business-amount mono">{{ formatWon(group.net_sale_amount) }}</strong>
+        <span class="business-count">{{ group.order_count }}건</span>
+      </div>
+    </section>
+
     <section class="channels">
       <p class="section-title">채널별</p>
       <ul v-if="channels.length" class="line-items">
         <li v-for="c in channels" :key="c.channel">
-          <span class="name">{{ c.channel || "미지정" }} · {{ c.order_count }}건</span>
+          <span class="name">{{ channelLabel(c.channel) }} · {{ c.order_count }}건</span>
           <span class="leader"></span>
           <span class="amt mono">{{ formatWon(c.net_sale_amount) }}</span>
         </li>
@@ -230,7 +261,7 @@ onMounted(loadAll);
             @click="selectedSaleId = o.id"
           >
             <td class="mono col-time">{{ formatTime(o.sold_at) }}</td>
-            <td>{{ o.channel || "-" }}</td>
+            <td>{{ channelLabel(o.channel) }}</td>
             <td>{{ o.payment_method || "-" }}</td>
             <td>
               <span :class="statusTagClass(o.payment_status)">
@@ -610,4 +641,17 @@ h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
   .order-table { min-width: 620px; }
   .orders { overflow-x: auto; }
 }
+</style>
+
+
+<style scoped>
+.business-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+.business-card { min-height: 118px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-card); }
+.business-card:nth-child(1) { border-top: 3px solid #2563eb; }
+.business-card:nth-child(2) { border-top: 3px solid #f97316; }
+.business-card:nth-child(3) { border-top: 3px solid #94a3b8; }
+.business-label { display: block; color: var(--muted); font-size: 13px; font-weight: 700; }
+.business-amount { display: block; margin-top: 12px; color: var(--ink); font-size: 22px; font-weight: 750; letter-spacing: -.03em; }
+.business-count { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+@media (max-width: 720px) { .business-summary { grid-template-columns: 1fr; gap: 10px; } .business-card { min-height: 0; } }
 </style>
