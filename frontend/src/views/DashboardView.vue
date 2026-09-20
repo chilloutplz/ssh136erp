@@ -36,7 +36,7 @@ const businessChannels = computed(() => {
     current.order_count += Number(row.order_count || 0);
     groups.set(type, current);
   }
-  return ["내점", "배달", "기타"].map((type) => groups.get(type) || {
+  return ["내점", "배달"].map((type) => groups.get(type) || {
     channel: type,
     sale_amount: 0,
     net_sale_amount: 0,
@@ -213,18 +213,22 @@ onMounted(loadAll);
           <span class="label">매출액</span>
           <span class="mono">{{ formatWon(today?.sale_amount) }}</span>
         </div>
-        <div>
-          <span class="label">순매출</span>
-          <span class="mono">{{ formatWon(today?.net_sale_amount) }}</span>
-        </div>
       </div>
     </section>
 
     <section class="business-summary">
       <div v-for="group in businessChannels" :key="group.channel" class="business-card">
         <span class="business-label">{{ group.channel }}</span>
-        <strong class="business-amount mono">{{ formatWon(group.net_sale_amount) }}</strong>
-        <span class="business-count">{{ group.order_count }}건</span>
+        <div class="business-metrics">
+          <div>
+            <span class="business-metric-label">주문 건수</span>
+            <strong class="business-metric-value mono">{{ group.order_count }}건</strong>
+          </div>
+          <div>
+            <span class="business-metric-label">매출액</span>
+            <strong class="business-metric-value mono">{{ formatWon(group.sale_amount) }}</strong>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -635,7 +639,7 @@ h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
   .page { padding: 22px 16px 48px; }
   .topbar { align-items: flex-start; }
   h1 { font-size: 23px; }
-  .totals-sub { grid-template-columns: 1fr; }
+  .totals-sub { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .totals-main .amount { font-size: 28px; }
   .channels, .orders, .totals-slip { padding: 16px; border-radius: var(--radius-md); }
   .order-table { min-width: 620px; }
@@ -645,13 +649,19 @@ h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
 
 
 <style scoped>
-.business-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
-.business-card { min-height: 118px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-card); }
+.business-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+.business-card { min-width: 0; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-card); }
 .business-card:nth-child(1) { border-top: 3px solid #2563eb; }
 .business-card:nth-child(2) { border-top: 3px solid #f97316; }
-.business-card:nth-child(3) { border-top: 3px solid #94a3b8; }
 .business-label { display: block; color: var(--muted); font-size: 13px; font-weight: 700; }
-.business-amount { display: block; margin-top: 12px; color: var(--ink); font-size: 22px; font-weight: 750; letter-spacing: -.03em; }
-.business-count { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
-@media (max-width: 720px) { .business-summary { grid-template-columns: 1fr; gap: 10px; } .business-card { min-height: 0; } }
+.business-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.business-metrics > div { min-width: 0; }
+.business-metric-label { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.business-metric-value { display: block; margin-top: 6px; color: var(--ink); font-size: 17px; font-weight: 750; letter-spacing: -.03em; white-space: nowrap; }
+@media (max-width: 720px) {
+  .business-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .business-card { padding: 15px 14px; }
+  .business-metrics { grid-template-columns: 1fr; gap: 9px; }
+  .business-metric-value { font-size: 16px; }
+}
 </style>
