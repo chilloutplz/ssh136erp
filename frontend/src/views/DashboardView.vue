@@ -221,7 +221,7 @@ onMounted(loadAll);
         <span class="label">실매출</span>
         <span class="amount mono">{{ formatWon(today?.actual_sale_amount) }}</span>
       </div>
-      <div class="summary-grid">
+      <div v-if="(today?.order_count ?? 0) > 0" class="summary-grid">
         <div class="summary-card">
           <div class="order-row">
             <span class="card-label title-order">주문</span>
@@ -251,6 +251,7 @@ onMounted(loadAll);
           <span class="card-amount mono">{{ formatWon(delivery.actual_sale_amount) }}</span>
         </div>
       </div>
+      <p v-else class="empty">해당 날짜에 집계된 매출이 없습니다.</p>
     </section>
 
     <section class="totals-slip channels-slip">
