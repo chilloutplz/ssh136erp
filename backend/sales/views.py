@@ -112,17 +112,31 @@ class SaleTodaySummaryView(APIView):
             net_sale_amount=Sum("net_sale_amount"),
             actual_sale_amount=Sum("actual_sale_amount"),
             order_count=Count("id"),
+        )
+        for key in ("sale_amount", "net_sale_amount", "actual_sale_amount", "order_count"):
+            agg[key] = agg[key] or 0
+        agg["date"] = target_date
+        return Response(agg)
+
+
+class SaleDiscountSummaryView(APIView):
+    """
+    GET /api/sales/summary/discount/?store_code=&date=YYYY-MM-DD
+    특정 날짜의 할인 금액과 할인 적용 주문 건수.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        target_date = request.query_params.get("date") or date.today().isoformat()
+        qs = _filtered_sales(request, exclude_cancelled=True).filter(
+            business_date=target_date
+        )
+        agg = qs.aggregate(
             discount_amount=Sum("discount_amount"),
             discount_order_count=Count("id", filter=Q(discount_amount__gt=0)),
         )
-        for key in (
-            "sale_amount",
-            "net_sale_amount",
-            "actual_sale_amount",
-            "order_count",
-            "discount_amount",
-            "discount_order_count",
-        ):
+        for key in ("discount_amount", "discount_order_count"):
             agg[key] = agg[key] or 0
         agg["date"] = target_date
         return Response(agg)

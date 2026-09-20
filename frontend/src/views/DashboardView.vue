@@ -12,6 +12,7 @@ const todayString = toDateString(new Date());
 const selectedDate = ref(todayString);
 
 const today = ref(null);
+const discount = ref({ discount_amount: 0, discount_order_count: 0 });
 const channels = ref([]);
 const orders = ref([]);
 const loading = ref(true);
@@ -118,6 +119,14 @@ async function loadAll() {
     today.value = todayRes.data;
     channels.value = channelRes.data;
     orders.value = ordersRes.data;
+    try {
+      const discountRes = await client.get("/sales/summary/discount/", {
+        params: { date: selectedDate.value },
+      });
+      discount.value = discountRes.data;
+    } catch {
+      discount.value = { discount_amount: 0, discount_order_count: 0 };
+    }
   } catch (e) {
     error.value = "데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
   } finally {
@@ -215,7 +224,7 @@ onMounted(loadAll);
         </div>
         <div>
           <span class="label">할인</span>
-          <span class="mono">{{ today?.discount_order_count ?? 0 }}건 · {{ formatWon(today?.discount_amount) }}</span>
+          <span class="mono">{{ discount.discount_order_count }}건 · {{ formatWon(discount.discount_amount) }}</span>
         </div>
       </div>
       <div class="business-summary">
