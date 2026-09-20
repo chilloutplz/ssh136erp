@@ -74,7 +74,7 @@ class SaleListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = _filtered_sales(request)[:500]  # 안전장치: 대량 조회 방지 (추후 페이지네이션으로 교체)
+        qs = _filtered_sales(request)[:500]
         return Response(SaleListSerializer(qs, many=True).data)
 
 
@@ -132,14 +132,16 @@ class SaleDiscountSummaryView(APIView):
         qs = _filtered_sales(request, exclude_cancelled=True).filter(
             business_date=target_date
         )
-        agg = qs.aggregate(
-            discount_amount=Sum("discount_amount"),
-            discount_order_count=Count("id", filter=Q(discount_amount__gt=0)),
+        # Count(..., filter=Q(...)) 는 일부 환경에서 500을 유발할 수 있어 분리 집계
+        discount_amount = qs.aggregate(s=Sum("discount_amount"))["s"] or 0
+        discount_order_count = qs.filter(discount_amount__gt=0).count()
+        return Response(
+            {
+                "discount_amount": discount_amount,
+                "discount_order_count": discount_order_count,
+                "date": target_date,
+            }
         )
-        for key in ("discount_amount", "discount_order_count"):
-            agg[key] = agg[key] or 0
-        agg["date"] = target_date
-        return Response(agg)
 
 
 class SaleDailySummaryView(APIView):
@@ -187,8 +189,9 @@ class SaleChannelSummaryView(APIView):
             .annotate(
                 sale_amount=Sum("sale_amount"),
                 net_sale_amount=Sum("net_sale_amount"),
+                actual_sale_amount=Sum("actual_sale_amount"),
                 order_count=Count("id"),
             )
-            .order_by("-net_sale_amount")
+            .order_by("-actual_sale_amount")
         )
         return Response(list(data))

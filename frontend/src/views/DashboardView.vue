@@ -5,7 +5,7 @@ import OrderDetailDrawer from "../components/OrderDetailDrawer.vue";
 import { businessType, channelLabel } from "../utils/channel";
 
 function toDateString(d) {
-  return d.toLocaleDateString("sv-SE"); // YYYY-MM-DD, 로컬 타임존 기준
+  return d.toLocaleDateString("sv-SE");
 }
 
 const todayString = toDateString(new Date());
@@ -22,37 +22,48 @@ const dateInput = ref(null);
 
 const isToday = computed(() => selectedDate.value === todayString);
 const todayDay = computed(() => new Date().getDate());
+
+/** 내점/배달 — 실매출(actual_sale_amount) 기준 집계 */
 const businessChannels = computed(() => {
   const groups = new Map();
   for (const row of channels.value) {
     const type = businessType(row.channel);
     const current = groups.get(type) || {
       channel: type,
-      sale_amount: 0,
-      net_sale_amount: 0,
       order_count: 0,
+      actual_sale_amount: 0,
     };
-    current.sale_amount += Number(row.sale_amount || 0);
-    current.net_sale_amount += Number(row.net_sale_amount || 0);
     current.order_count += Number(row.order_count || 0);
+    current.actual_sale_amount += Number(
+      row.actual_sale_amount ?? row.net_sale_amount ?? 0
+    );
     groups.set(type, current);
   }
-  return ["내점", "배달"].map((type) => groups.get(type) || {
-    channel: type,
-    sale_amount: 0,
-    net_sale_amount: 0,
-    order_count: 0,
-  });
+  return ["내점", "배달"].map(
+    (type) =>
+      groups.get(type) || {
+        channel: type,
+        order_count: 0,
+        actual_sale_amount: 0,
+      }
+  );
 });
 
-const dateLabel = computed(() =>
-  new Date(`${selectedDate.value}T00:00:00`).toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  })
-);
+const dineIn = computed(() => businessChannels.value[0]);
+const delivery = computed(() => businessChannels.value[1]);
+
+const dateLabel = computed(() => {
+  const date = new Date(`${selectedDate.value}T00:00:00`);
+
+  // 두 자리 월/일
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  // 요일 (짧은 이름)
+  const weekday = date.toLocaleDateString("ko-KR", { weekday: "short" });
+
+  return `${date.getFullYear()}-${month}-${day} (${weekday})`;
+});
 
 function formatWon(n) {
   return `₩${Number(n || 0).toLocaleString("ko-KR")}`;
@@ -85,7 +96,6 @@ function goToday() {
   selectedDate.value = todayString;
 }
 
-/** 모바일/데스크톱에서 달력 팝업 열기 */
 function openDatePicker(e) {
   e?.preventDefault?.();
   const el = dateInput.value;
@@ -95,7 +105,7 @@ function openDatePicker(e) {
       el.showPicker();
       return;
     } catch {
-      // fallback below
+      /* fallback */
     }
   }
   el.focus();
@@ -106,7 +116,7 @@ async function loadAll() {
   loading.value = true;
   error.value = "";
   try {
-    const [todayRes, channelRes, ordersRes] = await Promise.all([
+    const [todayRes, channelRes, ordersRes, discountRes] = await Promise.all([
       client.get("/sales/summary/today/", { params: { date: selectedDate.value } }),
       client.get("/sales/summary/by-channel/", { params: { date: selectedDate.value } }),
       client.get("/sales/", {
@@ -115,18 +125,12 @@ async function loadAll() {
           business_date_to: selectedDate.value,
         },
       }),
+      client.get("/sales/summary/discount/", { params: { date: selectedDate.value } }),
     ]);
     today.value = todayRes.data;
     channels.value = channelRes.data;
     orders.value = ordersRes.data;
-    try {
-      const discountRes = await client.get("/sales/summary/discount/", {
-        params: { date: selectedDate.value },
-      });
-      discount.value = discountRes.data;
-    } catch {
-      discount.value = { discount_amount: 0, discount_order_count: 0 };
-    }
+    discount.value = discountRes.data;
   } catch (e) {
     error.value = "데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
   } finally {
@@ -155,7 +159,7 @@ onMounted(loadAll);
   <div class="page">
     <header class="topbar">
       <div>
-        <h1>매출 정산</h1>
+        <h1>매출 현황</h1>
       </div>
       <div class="topbar-right">
         <button class="ghost" type="button" @click="refreshDashboard">새로고침</button>
@@ -208,33 +212,35 @@ onMounted(loadAll);
 
     <div v-if="error" class="banner error">{{ error }}</div>
 
-    <section class="totals-slip">
-      <div class="totals-main">
-        <span class="label">실매출</span>
-        <span class="amount mono">{{ formatWon(today?.actual_sale_amount) }}</span>
+    <!-- 2x2 요약 카드 -->
+    <section class="summary-grid">
+      <div class="summary-card">
+        <div class="order-row">
+          <span class="card-label">주문</span>
+          <span class="card-label">{{ today?.order_count ?? 0 }}건</span>
+        </div>
+        <span class="card-amount mono">{{ formatWon(today?.actual_sale_amount) }}</span>
       </div>
-      <div class="totals-sub">
-        <div>
-          <span class="label">주문 건수</span>
-          <span class="mono">{{ today?.order_count ?? 0 }}건</span>
+      <div class="summary-card">
+        <div class="order-row">
+          <span class="card-label">할인</span>
+          <span class="card-label">{{ discount.discount_order_count }}건</span>
         </div>
-        <div>
-          <span class="label">매출액</span>
-          <span class="mono">{{ formatWon(today?.sale_amount) }}</span>
-        </div>
-        <div>
-          <span class="label">할인</span>
-          <span class="mono">{{ discount.discount_order_count }}건 · {{ formatWon(discount.discount_amount) }}</span>
-        </div>
+        <span class="card-amount mono">{{ formatWon(discount.discount_amount) }}</span>
       </div>
-      <div class="business-summary">
-        <div v-for="group in businessChannels" :key="group.channel" class="business-card">
-          <span class="business-label">{{ group.channel }}</span>
-          <div class="business-metrics">
-            <strong class="business-metric-value mono">{{ group.order_count }}건</strong>
-            <strong class="business-metric-value mono">{{ formatWon(group.sale_amount) }}</strong>
-          </div>
+      <div class="summary-card">
+        <div class="order-row">
+          <span class="card-label">내점</span>
+          <span class="card-label">{{ dineIn.order_count }}건</span>
         </div>
+        <span class="card-amount mono">{{ formatWon(dineIn.actual_sale_amount) }}</span>
+      </div>
+      <div class="summary-card">
+        <div class="order-row">
+          <span class="card-label">배달</span>
+          <span class="card-label">{{ delivery.order_count }}건</span>
+        </div>
+        <span class="card-amount mono">{{ formatWon(delivery.actual_sale_amount) }}</span>
       </div>
     </section>
 
@@ -244,7 +250,9 @@ onMounted(loadAll);
         <li v-for="c in channels" :key="c.channel">
           <span class="name">{{ channelLabel(c.channel) }} · {{ c.order_count }}건</span>
           <span class="leader"></span>
-          <span class="amt mono">{{ formatWon(c.net_sale_amount) }}</span>
+          <span class="amt mono">{{
+            formatWon(c.actual_sale_amount ?? c.net_sale_amount)
+          }}</span>
         </li>
       </ul>
       <p v-else class="empty">해당 날짜에 집계된 채널별 매출이 없습니다.</p>
@@ -293,6 +301,12 @@ onMounted(loadAll);
 </template>
 
 <style scoped>
+.order-row {
+  display: flex;
+  justify-content: space-between; /* 양쪽 끝으로 배치 */
+  align-items: center;            /* 세로 가운데 정렬 */
+}
+
 .page {
   max-width: 760px;
   margin: 0 auto;
@@ -302,25 +316,19 @@ onMounted(loadAll);
 .topbar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-}
-
-.eyebrow {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 h1 {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 24px;
+  font-weight: 700;
 }
 
 .topbar-right {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .date-nav {
@@ -370,7 +378,6 @@ h1 {
   pointer-events: none;
 }
 
-/* display:none 금지 — 달력 안 뜸. opacity 0도 일부 모바일에서 클릭 무시 */
 .date-input-overlay {
   position: absolute;
   left: 0;
@@ -400,10 +407,6 @@ h1 {
   line-height: 1;
 }
 
-.today-chip:hover {
-  border-color: var(--ink-soft);
-}
-
 .ghost {
   background: none;
   border: 1px solid var(--rule);
@@ -411,6 +414,7 @@ h1 {
   font-size: 13px;
   cursor: pointer;
   color: var(--ink-soft);
+  border-radius: 6px;
 }
 
 .ghost:hover {
@@ -422,53 +426,47 @@ h1 {
   color: var(--stamp);
   padding: 10px 14px;
   font-size: 13px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  border-radius: 8px;
 }
 
-.totals-slip {
+/* 2x2 요약 */
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
   background: #fff;
   border: 1px solid var(--rule);
-  padding: 24px 28px;
-  margin-bottom: 28px;
-}
-
-.totals-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding-bottom: 16px;
-  margin-bottom: 16px;
-  border-bottom: 1px dashed var(--rule-strong);
-}
-
-.totals-main .label {
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.totals-main .amount {
-  font-size: 32px;
-  font-weight: 600;
-}
-
-.totals-sub {
-  display: flex;
-  gap: 32px;
-}
-
-.totals-sub > div {
+  border-radius: 12px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.totals-sub .label {
+.card-label {
   font-size: 12px;
+  font-weight: 600;
   color: var(--muted);
 }
 
-.totals-sub .mono {
+.card-metric {
   font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.card-amount {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  align-self: flex-end;
 }
 
 .section-title {
@@ -477,8 +475,13 @@ h1 {
   margin: 0 0 12px;
 }
 
-.channels {
-  margin-bottom: 28px;
+.channels,
+.orders {
+  margin-bottom: 24px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 18px 20px;
 }
 
 .line-items {
@@ -491,7 +494,7 @@ h1 {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 7px 0;
+  padding: 8px 0;
   font-size: 14px;
   border-bottom: 1px solid var(--paper-dim);
 }
@@ -574,97 +577,20 @@ h1 {
 .tag.pending {
   background: var(--paper-dim);
   color: var(--muted);
-  border: 1px dashed var(--rule-strong);
 }
 
 @media (max-width: 480px) {
-  .date-label {
-    font-size: 13px;
+  .page {
+    padding: 20px 14px 48px;
   }
-  .today-chip {
-    width: 30px;
-    height: 30px;
+  .card-amount {
+    font-size: 18px;
   }
-}
-</style>
-
-
-<style scoped>
-.page { max-width: 1280px; padding: 32px 32px 64px; }
-.topbar { align-items: center; margin-bottom: 20px; }
-h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
-.topbar-right { gap: 10px; }
-.ghost, .date-trigger, .today-chip {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--ink-soft);
-  box-shadow: 0 1px 2px rgba(15,23,42,.03);
-}
-.ghost { padding: 9px 14px; font-weight: 600; }
-.ghost:hover, .today-chip:hover { border-color: #93c5fd; color: var(--ledger); background: #f8fbff; }
-.date-nav { margin-bottom: 24px; }
-.date-trigger { min-height: 40px; padding: 8px 12px; }
-.banner.error { border: 1px solid #fecaca; border-radius: var(--radius-md); background: var(--stamp-bg); padding: 12px 14px; }
-.totals-slip {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-lg);
-  background: #fff;
-  box-shadow: var(--shadow-card);
-  padding: 22px 24px;
-  margin-bottom: 20px;
-}
-.totals-main { border-bottom: 0; padding: 0 0 20px; margin: 0 0 20px; }
-.totals-main .label, .totals-sub .label { color: var(--muted); font-size: 12px; font-weight: 600; }
-.totals-main .amount { color: var(--ink); font-size: 34px; font-weight: 750; letter-spacing: -.04em; }
-.totals-sub { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.totals-sub > div { border: 1px solid var(--rule); border-radius: var(--radius-md); background: #f8fafc; padding: 14px; gap: 7px; }
-.totals-sub .mono { color: var(--ink); font-size: 17px; font-weight: 700; }
-.channels, .orders {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-lg);
-  background: #fff;
-  box-shadow: var(--shadow-card);
-  padding: 20px 22px;
-  margin-bottom: 20px;
-}
-.section-title { color: var(--ink); font-size: 15px; font-weight: 700; margin-bottom: 16px; }
-.line-items li { padding: 11px 0; border-bottom-color: var(--rule); }
-.line-items .name { color: var(--ink-soft); }
-.line-items .leader { border-bottom-color: #cbd5e1; }
-.order-table { font-size: 14px; }
-.order-table th { background: #f8fafc; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 12px 10px; border-bottom: 1px solid var(--rule); }
-.order-table td { padding: 14px 10px; border-bottom: 1px solid #eef2f7; color: var(--ink-soft); }
-.order-table tbody tr:hover { background: #f8fbff; }
-.tag { border: 0; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700; }
-.tag.ledger { background: var(--success-bg); color: var(--success); }
-.tag.stamp { background: var(--stamp-bg); color: var(--stamp); }
-.tag.pending { border: 0; background: var(--warning-bg); color: var(--warning); }
-.empty { color: var(--muted); padding: 26px 0; }
-@media (max-width: 720px) {
-  .page { padding: 22px 16px 48px; }
-  .topbar { align-items: flex-start; }
-  h1 { font-size: 23px; }
-  .totals-sub { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .totals-main .amount { font-size: 28px; }
-  .channels, .orders, .totals-slip { padding: 16px; border-radius: var(--radius-md); }
-  .order-table { min-width: 620px; }
-  .orders { overflow-x: auto; }
-}
-</style>
-
-
-<style scoped>
-.business-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
-.business-card { min-width: 0; padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--radius-md); background: #f8fafc; }
-.business-label { display: block; color: var(--muted); font-size: 13px; font-weight: 700; }
-.business-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-.business-metrics > div { min-width: 0; }
-.business-metric-value { display: block; color: var(--ink); font-size: 17px; font-weight: 750; letter-spacing: -.03em; white-space: nowrap; }
-@media (max-width: 720px) {
-  .business-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .business-card { padding: 15px 14px; }
-  .business-metrics { grid-template-columns: 1fr; gap: 9px; }
-  .business-metric-value { font-size: 16px; }
+  .summary-grid {
+    gap: 8px;
+  }
+  .summary-card {
+    padding: 12px 14px;
+  }
 }
 </style>
