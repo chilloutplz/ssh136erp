@@ -5,8 +5,10 @@ const CHANNEL_MAP = {
   PLUGIN_COUPANGEATS: { label: "쿠팡", icon: "📦", className: "ch-coupang" },
   PLUGIN_YOGIYO: { label: "요기요", icon: "🍔", className: "ch-yogiyo" },
   PLUGIN_DDANGYO: { label: "땡겨요", icon: "🥡", className: "ch-etc" },
-  TABLE_ORDER: { label: "테이블", icon: "🍽️", className: "ch-table" },
-  POS: { label: "매장", icon: "🏪", className: "ch-pos" },
+  PLUGIN_KARROT: { label: "당근", icon: "🥕", className: "ch-etc" },
+  PLUGIN_CARROT: { label: "당근", icon: "🥕", className: "ch-etc" },
+  TABLE_ORDER: { label: "Table Order", icon: "🍽️", className: "ch-table" },
+  POS: { label: "POS", icon: "🏪", className: "ch-pos" },
 };
 
 export function channelMeta(raw) {
@@ -23,11 +25,18 @@ export function channelLabel(raw) {
   return channelMeta(raw).label;
 }
 
+/** 내점/배달 구분 — TABLE_ORDER·POS 는 모두 내점 */
 export function businessType(raw) {
   const value = String(raw || "").toUpperCase();
   if (value === "POS" || value === "TABLE_ORDER") return "내점";
   if (value.startsWith("PLUGIN_")) return "배달";
   return "기타";
+}
+
+/** 주문 목록용: POS·TABLE_ORDER → 내점, 그 외는 channelLabel */
+export function orderListChannelLabel(raw) {
+  if (businessType(raw) === "내점") return "내점";
+  return channelLabel(raw);
 }
 
 /**
@@ -41,15 +50,32 @@ export function orderCode(raw) {
   const s = String(raw).trim();
   const parts = s.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return parts[parts.length - 1];
-  // "배민_T2GD…_20260917" 형태면 가운데 토큰 우선
   if (s.includes("_")) {
     const segs = s.split("_").filter(Boolean);
     if (segs.length >= 2) {
-      // 날짜(8자리 숫자) 제외한 가장 긴 세그먼트
       const candidates = segs.filter((x) => !/^\d{8}$/.test(x));
-      const codeish = candidates.find((x) => /[A-Za-z0-9]{4,}/.test(x) && !/^(배민|쿠팡|요기요|배달)/.test(x));
+      const codeish = candidates.find(
+        (x) => /[A-Za-z0-9]{4,}/.test(x) && !/^(배민|쿠팡|요기요|배달)/.test(x)
+      );
       if (codeish) return codeish;
     }
   }
   return s;
+}
+
+/**
+ * 채널별 형광펜(배경) 클래스 — 브랜드 연상 파스텔
+ * 배민 민트 / 쿠팡 블루 / 요기요 핑크 등
+ */
+export function channelHighlightClass(raw) {
+  const v = String(raw || "").toUpperCase();
+  if (v === "PLUGIN_BAEMIN") return "ch-hl-baemin";
+  if (v === "PLUGIN_COUPANGEATS" || v.includes("COUPANG")) return "ch-hl-coupang";
+  if (v === "PLUGIN_YOGIYO") return "ch-hl-yogiyo";
+  if (v === "PLUGIN_DDANGYO") return "ch-hl-ddangyo";
+  if (v.includes("KARROT") || v.includes("CARROT") || v.includes("당근")) return "ch-hl-carrot";
+  if (v === "TABLE_ORDER") return "ch-hl-table";
+  if (v === "POS") return "ch-hl-pos";
+  if (v.startsWith("PLUGIN_")) return "ch-hl-etc";
+  return "ch-hl-etc";
 }

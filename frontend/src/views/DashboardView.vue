@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import client from "../api/client";
 import OrderDetailDrawer from "../components/OrderDetailDrawer.vue";
-import { businessType, channelLabel } from "../utils/channel";
+import { businessType, channelLabel, orderCode, orderListChannelLabel, channelHighlightClass } from "../utils/channel";
 
 function toDateString(d) {
   return d.toLocaleDateString("sv-SE");
@@ -54,14 +54,9 @@ const delivery = computed(() => businessChannels.value[1]);
 
 const dateLabel = computed(() => {
   const date = new Date(`${selectedDate.value}T00:00:00`);
-
-  // 두 자리 월/일
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-
-  // 요일 (짧은 이름)
   const weekday = date.toLocaleDateString("ko-KR", { weekday: "short" });
-
   return `${date.getFullYear()}-${month}-${day} (${weekday})`;
 });
 
@@ -73,6 +68,14 @@ function statusTagClass(status) {
   if (status === "결제취소") return "tag stamp";
   if (status === "진행중") return "tag pending";
   return "tag ledger";
+}
+
+/** 결제상태 → 두 글자 표시 */
+function statusLabel(status) {
+  if (status === "결제취소") return "취소";
+  if (status === "진행중") return "진행";
+  if (status === "결제완료") return "완료";
+  return status || "-";
 }
 
 function formatTime(iso) {
@@ -212,62 +215,75 @@ onMounted(loadAll);
 
     <div v-if="error" class="banner error">{{ error }}</div>
 
-    <!-- 2x2 요약 카드 -->
-    <section class="summary-grid">
-      <div class="summary-card">
-        <div class="order-row">
-          <span class="card-label">주문</span>
-          <span class="card-label">{{ today?.order_count ?? 0 }}건</span>
-        </div>
-        <span class="card-amount mono">{{ formatWon(today?.actual_sale_amount) }}</span>
+    <!-- 실매출 큰 영역 + 내부 2x2 (구분선 없음) -->
+    <section class="totals-slip">
+      <div class="totals-main">
+        <span class="label">실매출</span>
+        <span class="amount mono">{{ formatWon(today?.actual_sale_amount) }}</span>
       </div>
-      <div class="summary-card">
-        <div class="order-row">
-          <span class="card-label">할인</span>
-          <span class="card-label">{{ discount.discount_order_count }}건</span>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="order-row">
+            <span class="card-label title-order">주문</span>
+            <span class="card-label">{{ today?.order_count ?? 0 }}건</span>
+          </div>
+          <span class="card-amount mono">{{ formatWon(today?.sale_amount) }}</span>
         </div>
-        <span class="card-amount mono">{{ formatWon(discount.discount_amount) }}</span>
-      </div>
-      <div class="summary-card">
-        <div class="order-row">
-          <span class="card-label">내점</span>
-          <span class="card-label">{{ dineIn.order_count }}건</span>
+        <div class="summary-card">
+          <div class="order-row">
+            <span class="card-label title-discount">할인</span>
+            <span class="card-label">{{ discount.discount_order_count }}건</span>
+          </div>
+          <span class="card-amount mono">{{ formatWon(discount.discount_amount) }}</span>
         </div>
-        <span class="card-amount mono">{{ formatWon(dineIn.actual_sale_amount) }}</span>
-      </div>
-      <div class="summary-card">
-        <div class="order-row">
-          <span class="card-label">배달</span>
-          <span class="card-label">{{ delivery.order_count }}건</span>
+        <div class="summary-card">
+          <div class="order-row">
+            <span class="card-label title-dinein">내점</span>
+            <span class="card-label">{{ dineIn.order_count }}건</span>
+          </div>
+          <span class="card-amount mono">{{ formatWon(dineIn.actual_sale_amount) }}</span>
         </div>
-        <span class="card-amount mono">{{ formatWon(delivery.actual_sale_amount) }}</span>
+        <div class="summary-card">
+          <div class="order-row">
+            <span class="card-label title-delivery">배달</span>
+            <span class="card-label">{{ delivery.order_count }}건</span>
+          </div>
+          <span class="card-amount mono">{{ formatWon(delivery.actual_sale_amount) }}</span>
+        </div>
       </div>
     </section>
 
-    <section class="channels">
-      <p class="section-title">채널별</p>
-      <ul v-if="channels.length" class="line-items">
-        <li v-for="c in channels" :key="c.channel">
-          <span class="name">{{ channelLabel(c.channel) }} · {{ c.order_count }}건</span>
-          <span class="leader"></span>
-          <span class="amt mono">{{
+    <section class="totals-slip channels-slip">
+      <div class="totals-main">
+        <span class="label">채널별</span>
+        <!-- <span class="amount-sub mono">{{ channels.length }}개</span> -->
+      </div>
+      <div v-if="channels.length" class="summary-grid">
+        <div v-for="c in channels" :key="c.channel" class="summary-card">
+          <div class="order-row">
+            <span class="card-label channel-hl" :class="channelHighlightClass(c.channel)">{{ channelLabel(c.channel) }}</span>
+            <span class="card-label">{{ c.order_count }}건</span>
+          </div>
+          <span class="card-amount mono">{{
             formatWon(c.actual_sale_amount ?? c.net_sale_amount)
           }}</span>
-        </li>
-      </ul>
+        </div>
+      </div>
       <p v-else class="empty">해당 날짜에 집계된 채널별 매출이 없습니다.</p>
     </section>
 
     <section class="orders">
-      <p class="section-title">주문 목록 ({{ orders.length }}건)</p>
-
+      <div class="totals-main">
+        <span class="label">주문 목록</span>
+        <span class="amount-sub mono">{{ orders.length }}건</span>
+      </div>
       <div v-if="loading" class="empty">불러오는 중...</div>
       <table v-else-if="orders.length" class="order-table">
         <thead>
           <tr>
             <th class="col-time">시간</th>
             <th>채널</th>
-            <th>결제수단</th>
+            <th>주문번호</th>
             <th>상태</th>
             <th class="right">실매출</th>
           </tr>
@@ -279,11 +295,11 @@ onMounted(loadAll);
             @click="selectedSaleId = o.id"
           >
             <td class="mono col-time">{{ formatTime(o.sold_at) }}</td>
-            <td>{{ channelLabel(o.channel) }}</td>
-            <td>{{ o.payment_method || "-" }}</td>
+            <td><span class="card-label channel-hl" :class="channelHighlightClass(o.channel)">{{ orderListChannelLabel(o.channel) }}</span></td>
+            <td class="mono col-order">{{ orderCode(o.channel_order_no) }}</td>
             <td>
               <span :class="statusTagClass(o.payment_status)">
-                {{ o.payment_status }}
+                {{ statusLabel(o.payment_status) }}
               </span>
             </td>
             <td class="right mono">{{ formatWon(o.actual_sale_amount) }}</td>
@@ -303,8 +319,8 @@ onMounted(loadAll);
 <style scoped>
 .order-row {
   display: flex;
-  justify-content: space-between; /* 양쪽 끝으로 배치 */
-  align-items: center;            /* 세로 가운데 정렬 */
+  justify-content: space-between;
+  align-items: center;
 }
 
 .page {
@@ -430,19 +446,115 @@ h1 {
   border-radius: 8px;
 }
 
-/* 2x2 요약 */
-.summary-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.summary-card {
+.totals-slip {
   background: #fff;
   border: 1px solid var(--rule);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 20px 18px 16px;
+  margin-bottom: 24px;
+}
+
+.totals-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+
+.totals-main .label {
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+
+.totals-main .amount-sub {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.channels-slip .empty {
+  margin: 0;
+  padding: 8px 0 4px;
+}
+
+.totals-main .amount {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+
+/* 실매출 카드 제목 — 형광펜(배지) 스타일 */
+.card-label.title-order,
+.card-label.title-discount,
+.card-label.title-dinein,
+.card-label.title-delivery {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.card-label.title-order {
+  background: #dbeafe;
+}
+.card-label.title-discount {
+  background: #fee2e2;
+}
+.card-label.title-dinein {
+  background: #d6ebff; /* 토스 블루 */
+}
+.card-label.title-delivery {
+  background: #d4f5f1; /* 배민 민트 */
+}
+
+/* 채널별 제목 형광펜 (브랜드 연상) */
+.card-label.channel-hl {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.ch-hl-baemin {
+  background: #d4f5f1; /* 배민 민트 */
+}
+.ch-hl-coupang {
+  background: #e5d0bc; /* 쿠팡이츠 갈색 (조금 더 진하게) */
+}
+.ch-hl-yogiyo {
+  background: #ffe0e6; /* 요기요 붉은 계열 */
+}
+.ch-hl-ddangyo {
+  background: #ffe4d1; /* 땡겨요 주황 계열 */
+}
+.ch-hl-carrot {
+  background: #ffe8d6; /* 당근 주황 + 은은한 톤 (로고 중심 초록은 강조 없이) */
+}
+.ch-hl-table,
+.ch-hl-pos {
+  background: #d6ebff; /* 토스 블루 계열 */
+}
+.ch-hl-etc {
+  background: #f0f0f0;
+}
+
+
+.summary-card {
+  background: #f8fafc;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -455,14 +567,8 @@ h1 {
   color: var(--muted);
 }
 
-.card-metric {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
 .card-amount {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ink);
@@ -475,7 +581,6 @@ h1 {
   margin: 0 0 12px;
 }
 
-.channels,
 .orders {
   margin-bottom: 24px;
   background: #fff;
@@ -558,6 +663,14 @@ h1 {
   white-space: nowrap;
 }
 
+.order-table .col-order {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 .tag {
   padding: 1px 8px;
   font-size: 12px;
@@ -583,8 +696,23 @@ h1 {
   .page {
     padding: 20px 14px 48px;
   }
+  
+.totals-main .amount-sub {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.channels-slip .empty {
+  margin: 0;
+  padding: 8px 0 4px;
+}
+
+.totals-main .amount {
+    font-size: 28px;
+  }
   .card-amount {
-    font-size: 18px;
+    font-size: 16px;
   }
   .summary-grid {
     gap: 8px;
