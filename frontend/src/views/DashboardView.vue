@@ -214,18 +214,11 @@ onMounted(loadAll);
           <span class="mono">{{ formatWon(today?.sale_amount) }}</span>
         </div>
       </div>
-    </section>
-
-    <section class="business-summary">
-      <div v-for="group in businessChannels" :key="group.channel" class="business-card">
-        <span class="business-label">{{ group.channel }}</span>
-        <div class="business-metrics">
-          <div>
-            <span class="business-metric-label">주문 건수</span>
+      <div class="business-summary">
+        <div v-for="group in businessChannels" :key="group.channel" class="business-card">
+          <span class="business-label">{{ group.channel }}</span>
+          <div class="business-metrics">
             <strong class="business-metric-value mono">{{ group.order_count }}건</strong>
-          </div>
-          <div>
-            <span class="business-metric-label">매출액</span>
             <strong class="business-metric-value mono">{{ formatWon(group.sale_amount) }}</strong>
           </div>
         </div>
@@ -649,15 +642,12 @@ h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
 
 
 <style scoped>
-.business-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
-.business-card { min-width: 0; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-card); }
-.business-card:nth-child(1) { border-top: 3px solid #2563eb; }
-.business-card:nth-child(2) { border-top: 3px solid #f97316; }
+.business-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+.business-card { min-width: 0; padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--radius-md); background: #f8fafc; }
 .business-label { display: block; color: var(--muted); font-size: 13px; font-weight: 700; }
-.business-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.business-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .business-metrics > div { min-width: 0; }
-.business-metric-label { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
-.business-metric-value { display: block; margin-top: 6px; color: var(--ink); font-size: 17px; font-weight: 750; letter-spacing: -.03em; white-space: nowrap; }
+.business-metric-value { display: block; color: var(--ink); font-size: 17px; font-weight: 750; letter-spacing: -.03em; white-space: nowrap; }
 @media (max-width: 720px) {
   .business-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .business-card { padding: 15px 14px; }
