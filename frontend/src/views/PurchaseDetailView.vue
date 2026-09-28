@@ -204,15 +204,37 @@ function openNewMaterial(idx) {
 
 async function createMaterial(idx) {
   const draft = newMaterialDrafts.value[idx];
-  if (!draft?.name?.trim()) return;
-  const { data } = await client.post("/purchases/materials/", {
-    name: draft.name.trim(),
-    unit: draft.unit.trim(),
-  });
-  materials.value.push(data);
-  items.value[idx].material = data.id;
-  items.value[idx].material_name = data.name;
-  newMaterialDrafts.value[idx].open = false;
+  if (!draft?.name?.trim()) {
+    error.value = "자재명을 입력하세요.";
+    return;
+  }
+  error.value = "";
+  saveMessage.value = "";
+  try {
+    const { data } = await client.post("/purchases/materials/", {
+      name: draft.name.trim(),
+      unit: (draft.unit || "").trim(),
+    });
+    // 목록에 없을 때만 추가
+    if (!materials.value.some((m) => m.id === data.id)) {
+      materials.value.push(data);
+    }
+    // select v-model 과 타입 일치 (숫자)
+    items.value[idx].material = Number(data.id);
+    items.value[idx].material_name = data.name;
+    newMaterialDrafts.value[idx].open = false;
+    saveMessage.value = `자재 「${data.name}」을(를) 등록하고 이 품목에 연결했습니다. 전표 저장을 눌러 주세요.`;
+  } catch (e) {
+    const detail = e?.response?.data;
+    let msg = "자재 등록에 실패했습니다.";
+    if (detail) {
+      if (typeof detail === "string") msg = detail;
+      else if (detail.detail) msg = String(detail.detail);
+      else if (detail.name) msg = `자재명: ${[].concat(detail.name).join(", ")}`;
+      else msg = JSON.stringify(detail);
+    }
+    error.value = msg;
+  }
 }
 
 // ---------------------------------------------------------------- 저장/확정
@@ -237,7 +259,7 @@ async function save() {
         quantity: it.quantity,
         unit_price: it.unit_price,
         amount: it.amount,
-        material: it.material || null,
+        material: it.material != null && it.material !== "" ? Number(it.material) : null,
       })),
     };
     const { data } = await client.patch(`/purchases/${route.params.id}/`, payload);
@@ -415,7 +437,7 @@ onMounted(load);
       >
         <template v-if="!purchase.supplier && purchase.supplier_name_raw">
           거래처가 아직 등록되지 않았습니다 —
-          아래 공급업체 선택에서 기존 거래처를 고르거나 「+」로 새로 등록하세요.
+          아래 공급업체에서 기존 거래처를 고르거나 「새 거래처 등록(수정 가능)」으로 등록하세요.
         </template>
         <template v-if="unresolvedItemCount > 0">
           자재가 연결되지 않은 품목이 {{ unresolvedItemCount }}건 있습니다 —
@@ -478,7 +500,7 @@ onMounted(load);
             </div>
           </dl>
           <button v-if="!isLocked" class="ghost small" type="button" @click="openNewSupplier">
-            이 정보로 새 거래처 등록
+            새 거래처 등록(수정 가능)
           </button>
         </div>
 
@@ -517,18 +539,7 @@ onMounted(load);
                     </option>
                   </optgroup>
                 </select>
-                <button
-                  v-if="!isLocked"
-                  class="link"
-                  type="button"
-                  @click="openNewSupplier"
-                >
-                  +
-                </button>
               </div>
-              <small v-if="!purchase.supplier && purchase.supplier_name_raw" class="hint">
-                문서 표기: {{ purchase.supplier_name_raw }}
-              </small>
             </template>
             <template v-else>
               <!-- 새 거래처 등록 폼: 파싱값이 채워져 있고, 사람이 확인/수정 후 등록 -->
@@ -630,7 +641,7 @@ onMounted(load);
                     <input
                       v-model="newMaterialDrafts[idx].name"
                       type="text"
-                      placeholder="자재명"
+                      placeholder="자재명 *"
                     />
                     <input
                       v-model="newMaterialDrafts[idx].unit"
@@ -638,7 +649,14 @@ onMounted(load);
                       placeholder="단위"
                       class="unit-input"
                     />
-                    <button class="link" type="button" @click="createMaterial(idx)">OK</button>
+                    <button class="link" type="button" @click="createMaterial(idx)">등록</button>
+                    <button
+                      class="link"
+                      type="button"
+                      @click="newMaterialDrafts[idx].open = false"
+                    >
+                      취소
+                    </button>
                   </div>
                 </template>
               </label>

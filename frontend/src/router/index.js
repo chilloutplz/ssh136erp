@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { authState } from "../stores/auth";
 import LoginView from "../views/LoginView.vue";
 import DashboardView from "../views/DashboardView.vue";
+import PeriodSalesView from "../views/PeriodSalesView.vue";
 import PurchaseListView from "../views/PurchaseListView.vue";
 import PurchaseDetailView from "../views/PurchaseDetailView.vue";
 import AppShell from "../layouts/AppShell.vue";
@@ -16,9 +17,14 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: "", redirect: "/sales" },
-        { path: "sales", name: "sales", component: DashboardView },
+        { path: "sales", name: "sales-daily", component: DashboardView },
+        { path: "sales/period", name: "sales-period", component: PeriodSalesView },
         { path: "purchases", name: "purchases", component: PurchaseListView },
-        { path: "purchases/:id", name: "purchase-detail", component: PurchaseDetailView },
+        {
+          path: "purchases/:id",
+          name: "purchase-detail",
+          component: PurchaseDetailView,
+        },
       ],
     },
   ],
@@ -29,7 +35,7 @@ router.beforeEach((to) => {
     return { name: "login" };
   }
   if (to.name === "login" && authState.isAuthenticated) {
-    return { name: "sales" };
+    return { name: "sales-daily" };
   }
 });
 

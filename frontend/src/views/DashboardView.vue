@@ -9,7 +9,22 @@ function toDateString(d) {
 }
 
 const todayString = toDateString(new Date());
-const selectedDate = ref(todayString);
+const DATE_STORAGE_KEY = "ssh136erp.sales.daily.date";
+
+function readStoredDate() {
+  try {
+    const raw = sessionStorage.getItem(DATE_STORAGE_KEY);
+    if (!raw) return todayString;
+    // YYYY-MM-DD only, and never after today
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return todayString;
+    if (raw > todayString) return todayString;
+    return raw;
+  } catch {
+    return todayString;
+  }
+}
+
+const selectedDate = ref(readStoredDate());
 
 const today = ref(null);
 const discount = ref({ discount_amount: 0, discount_order_count: 0 });
@@ -159,15 +174,31 @@ async function refreshDashboard() {
   if (syncError) error.value = syncError;
 }
 
-watch(selectedDate, loadAll);
-onMounted(loadAll);
+watch(selectedDate, (value) => {
+  try {
+    sessionStorage.setItem(DATE_STORAGE_KEY, value);
+  } catch {
+    /* ignore quota / private mode */
+  }
+  loadAll();
+});
+
+onMounted(async () => {
+  // F5 등 전체 새로고침 시에도 진행중 내점 추가주문 동기화
+  try {
+    await client.post("/integrations/tosspos/sync-pending/");
+  } catch (e) {
+    // 동기화 실패해도 목록은 로드
+  }
+  await loadAll();
+});
 </script>
 
 <template>
   <div class="page">
     <header class="topbar">
       <div>
-        <h1>매출 현황</h1>
+        <h1>일일매출</h1>
       </div>
       <div class="topbar-right">
         <button class="ghost" type="button" @click="refreshDashboard">새로고침</button>
