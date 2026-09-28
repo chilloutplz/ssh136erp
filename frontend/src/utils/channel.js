@@ -39,6 +39,23 @@ export function orderListChannelLabel(raw) {
   return channelLabel(raw);
 }
 
+/** 주문 목록 좁은 칸용 한 글자 */
+export function orderListChannelShort(raw) {
+  const full = orderListChannelLabel(raw);
+  const map = {
+    배민: "배",
+    쿠팡: "쿠",
+    요기요: "요",
+    땡겨요: "땡",
+    당근: "당",
+    내점: "내",
+    "Table Order": "T",
+    POS: "P",
+  };
+  if (map[full]) return map[full];
+  return full ? full[0] : "·";
+}
+
 /**
  * orderNumber / channel_order_no 에서 플랫폼명 제거 후 코드만.
  * 예: "배달의민족 T2GD0000RMUV" → "T2GD0000RMUV"

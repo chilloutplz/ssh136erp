@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import client from "../api/client";
 import OrderDetailDrawer from "../components/OrderDetailDrawer.vue";
-import { businessType, channelLabel, orderCode, orderListChannelLabel, channelHighlightClass } from "../utils/channel";
+import { businessType, channelLabel, orderCode, orderListChannelLabel, orderListChannelShort, channelHighlightClass } from "../utils/channel";
 
 function toDateString(d) {
   return d.toLocaleDateString("sv-SE");
@@ -23,7 +23,6 @@ const dateInput = ref(null);
 const isToday = computed(() => selectedDate.value === todayString);
 const todayDay = computed(() => new Date().getDate());
 
-/** 내점/배달 — 실매출(actual_sale_amount) 기준 집계 */
 const businessChannels = computed(() => {
   const groups = new Map();
   for (const row of channels.value) {
@@ -70,12 +69,18 @@ function statusTagClass(status) {
   return "tag ledger";
 }
 
-/** 결제상태 → 두 글자 표시 */
 function statusLabel(status) {
+  if (status === "결제취소") return "취";
+  if (status === "진행중") return "진";
+  if (status === "결제완료") return "완";
+  return status ? String(status)[0] : "-";
+}
+
+function statusTitle(status) {
   if (status === "결제취소") return "취소";
   if (status === "진행중") return "진행";
   if (status === "결제완료") return "완료";
-  return status || "-";
+  return status || "";
 }
 
 function formatTime(iso) {
@@ -215,7 +220,6 @@ onMounted(loadAll);
 
     <div v-if="error" class="banner error">{{ error }}</div>
 
-    <!-- 실매출 큰 영역 + 내부 2x2 (구분선 없음) -->
     <section class="totals-slip">
       <div class="totals-main">
         <span class="label">실매출</span>
@@ -257,7 +261,6 @@ onMounted(loadAll);
     <section class="totals-slip channels-slip">
       <div class="totals-main">
         <span class="label">채널별</span>
-        <!-- <span class="amount-sub mono">{{ channels.length }}개</span> -->
       </div>
       <div v-if="channels.length" class="summary-grid">
         <div v-for="c in channels" :key="c.channel" class="summary-card">
@@ -296,12 +299,13 @@ onMounted(loadAll);
             @click="selectedSaleId = o.id"
           >
             <td class="mono col-time">{{ formatTime(o.sold_at) }}</td>
-            <td><span class="card-label channel-hl" :class="channelHighlightClass(o.channel)">{{ orderListChannelLabel(o.channel) }}</span></td>
+            <td><span class="badge channel-hl" :class="channelHighlightClass(o.channel)" :title="orderListChannelLabel(o.channel)">{{ orderListChannelShort(o.channel) }}</span></td>
             <td class="mono col-order">{{ orderCode(o.channel_order_no) }}</td>
             <td>
-              <span :class="statusTagClass(o.payment_status)">
-                {{ statusLabel(o.payment_status) }}
-              </span>
+              <span
+                :class="statusTagClass(o.payment_status)"
+                :title="statusTitle(o.payment_status)"
+              >{{ statusLabel(o.payment_status) }}</span>
             </td>
             <td class="right mono">{{ formatWon(o.actual_sale_amount) }}</td>
           </tr>
@@ -468,7 +472,6 @@ h1 {
   font-weight: 600;
 }
 
-
 .totals-main .amount-sub {
   font-size: 15px;
   font-weight: 600;
@@ -493,63 +496,6 @@ h1 {
   gap: 10px;
   margin-bottom: 0;
 }
-
-
-/* 실매출 카드 제목 — 형광펜(배지) 스타일 */
-.card-label.title-order,
-.card-label.title-discount,
-.card-label.title-dinein,
-.card-label.title-delivery {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-.card-label.title-order {
-  background: #dbeafe;
-}
-.card-label.title-discount {
-  background: #fee2e2;
-}
-.card-label.title-dinein {
-  background: #d6ebff; /* 토스 블루 */
-}
-.card-label.title-delivery {
-  background: #d4f5f1; /* 배민 민트 */
-}
-
-/* 채널별 제목 형광펜 (브랜드 연상) */
-.card-label.channel-hl {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-.ch-hl-baemin {
-  background: #d4f5f1; /* 배민 민트 */
-}
-.ch-hl-coupang {
-  background: #e5d0bc; /* 쿠팡이츠 갈색 (조금 더 진하게) */
-}
-.ch-hl-yogiyo {
-  background: #ffe0e6; /* 요기요 붉은 계열 */
-}
-.ch-hl-ddangyo {
-  background: #ffe4d1; /* 땡겨요 주황 계열 */
-}
-.ch-hl-carrot {
-  background: #ffe8d6; /* 당근 주황 + 은은한 톤 (로고 중심 초록은 강조 없이) */
-}
-.ch-hl-table,
-.ch-hl-pos {
-  background: #d6ebff; /* 토스 블루 계열 */
-}
-.ch-hl-etc {
-  background: #f0f0f0;
-}
-
 
 .summary-card {
   background: #f8fafc;
@@ -588,36 +534,6 @@ h1 {
   border: 1px solid var(--rule);
   border-radius: 12px;
   padding: 18px 20px;
-}
-
-.line-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.line-items li {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 0;
-  font-size: 14px;
-  border-bottom: 1px solid var(--paper-dim);
-}
-
-.line-items .name {
-  white-space: nowrap;
-  color: var(--ink-soft);
-}
-
-.line-items .leader {
-  flex: 1;
-  border-bottom: 1px dotted var(--rule-strong);
-  transform: translateY(-3px);
-}
-
-.line-items .amt {
-  white-space: nowrap;
 }
 
 .empty {
@@ -672,10 +588,22 @@ h1 {
   font-size: 12px;
 }
 
+.order-table .badge,
+.order-table .tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 2px 6px;
+  white-space: nowrap;
+  word-break: keep-all;
+  line-height: 1.3;
+}
+
 .tag {
-  padding: 1px 8px;
+  padding: 2px 6px;
   font-size: 12px;
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 .tag.ledger {
@@ -693,33 +621,46 @@ h1 {
   color: var(--muted);
 }
 
-@media (max-width: 480px) {
-  .page {
-    padding: 20px 14px 48px;
-  }
-  
-.totals-main .amount-sub {
-  font-size: 15px;
-  font-weight: 600;
+.card-label.title-order,
+.card-label.title-discount,
+.card-label.title-dinein,
+.card-label.title-delivery {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
   color: var(--ink-soft);
 }
+.card-label.title-order { background: #dbeafe; }
+.card-label.title-discount { background: #fee2e2; }
+.card-label.title-dinein { background: #d6ebff; }
+.card-label.title-delivery { background: #d4f5f1; }
 
-.channels-slip .empty {
-  margin: 0;
-  padding: 8px 0 4px;
+.order-table .channel-hl {
+  font-size: 12px;
+  font-weight: 700;
 }
+.card-label.channel-hl {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.ch-hl-baemin { background: #d4f5f1; }
+.ch-hl-coupang { background: #e5d0bc; }
+.ch-hl-yogiyo { background: #ffe0e6; }
+.ch-hl-ddangyo { background: #ffe4d1; }
+.ch-hl-carrot { background: #ffe8d6; }
+.ch-hl-table,
+.ch-hl-pos { background: #d6ebff; }
+.ch-hl-etc { background: #f0f0f0; }
 
-.totals-main .amount {
-    font-size: 28px;
-  }
-  .card-amount {
-    font-size: 16px;
-  }
-  .summary-grid {
-    gap: 8px;
-  }
-  .summary-card {
-    padding: 12px 14px;
-  }
+@media (max-width: 480px) {
+  .page { padding: 20px 14px 48px; }
+  .totals-main .amount { font-size: 28px; }
+  .card-amount { font-size: 16px; }
+  .summary-grid { gap: 8px; }
+  .summary-card { padding: 12px 14px; }
 }
 </style>
