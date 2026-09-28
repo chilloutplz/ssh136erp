@@ -9,6 +9,7 @@ const router = useRouter();
 const purchase = ref(null);
 const items = ref([]);
 const materials = ref([]);
+const suppliers = ref([]);
 const loading = ref(true);
 const error = ref("");
 const saving = ref(false);
@@ -24,6 +25,30 @@ const previewLoading = ref(false);
 const previewError = ref("");
 
 const newMaterialDrafts = ref({});
+/** 거래처 신규 생성 드래프트 (human-in-the-loop: 사람이 명시적으로 생성 버튼을 눌러야 함).
+ *  명세서 파싱값(supplier_draft)이 있으면 기본값으로 채워준다. */
+const newSupplierDraft = ref({
+  open: false,
+  name: "",
+  business_number: "",
+  representative: "",
+  phone: "",
+  fax: "",
+  email: "",
+  address: "",
+});
+
+/** 명세서에서 파싱한 거래처 정보 (제안값 — 그대로 저장하지 않고 사람이 확인/수정 후 등록) */
+const supplierDraft = computed(() => purchase.value?.supplier_draft || {});
+
+const SUPPLIER_DRAFT_LABELS = {
+  business_number: "사업자번호",
+  representative: "대표자",
+  phone: "전화",
+  fax: "팩스",
+  email: "이메일",
+  address: "사업장 주소",
+};
 
 const isConfirmed = computed(() => purchase.value?.status === "CONFIRMED");
 /** 실제 입력 잠금: 확정이면서 수정모드가 아닐 때만 */
@@ -39,10 +64,11 @@ const canReparse = computed(
     purchase.value.status !== "CONFIRMED" &&
     purchase.value.file_url
 );
-const isImageFile = computed(() => {
-  const url = purchase.value?.file_url || "";
-  return /\.(png|jpe?g|webp|gif)$/i.test(url);
-});
+
+/** 아직 자재로 연결 안 된 품목 수 (검토 필요 알림용) */
+const unresolvedItemCount = computed(
+  () => items.value.filter((it) => !it.material).length
+);
 
 function formatWon(n) {
   return `₩${Number(n || 0).toLocaleString("ko-KR")}`;
@@ -81,13 +107,15 @@ async function load() {
   previewImages.value = [];
   previewError.value = "";
   try {
-    const [{ data: p }, { data: mats }] = await Promise.all([
+    const [{ data: p }, { data: mats }, { data: sups }] = await Promise.all([
       client.get(`/purchases/${route.params.id}/`),
       client.get("/purchases/materials/"),
+      client.get("/purchases/suppliers/"),
     ]);
     purchase.value = p;
     items.value = (p.items || []).map((it) => ({ ...it }));
     materials.value = mats;
+    suppliers.value = sups;
   } catch (e) {
     error.value = "매입 전표를 불러오지 못했습니다.";
   } finally {
@@ -117,6 +145,7 @@ function addRow() {
     amount: 0,
     material: null,
     material_name: "",
+    material_candidates: [],
   });
 }
 
@@ -124,11 +153,52 @@ function removeRow(idx) {
   items.value.splice(idx, 1);
 }
 
+// ---------------------------------------------------------------- 거래처
+
+/** 거래처 선택 시 raw 이름도 같이 맞춤 (표시/정합성용) */
+function onSupplierChange() {
+  const id = purchase.value.supplier;
+  const found = suppliers.value.find((s) => s.id === id);
+  if (found) purchase.value.supplier_name_raw = found.name;
+}
+
+/** 새 거래처 폼 열기 — 파싱된 supplier_draft 값으로 미리 채움 (제안값) */
+function openNewSupplier() {
+  const d = supplierDraft.value;
+  newSupplierDraft.value = {
+    open: true,
+    name: d.name || purchase.value?.supplier_name_raw || "",
+    business_number: d.business_number || "",
+    representative: d.representative || "",
+    phone: d.phone || "",
+    fax: d.fax || "",
+    email: d.email || "",
+    address: d.address || "",
+  };
+}
+
+/** 사람이 확인/수정한 값으로만 거래처 생성 — 파싱값 자동 저장은 없음 */
+async function createSupplier() {
+  const d = newSupplierDraft.value;
+  if (!d.name?.trim()) return;
+  const payload = {};
+  for (const k of ["name", "business_number", "representative", "phone", "fax", "email", "address"]) {
+    if (d[k]?.trim()) payload[k] = d[k].trim();
+  }
+  const { data } = await client.post("/purchases/suppliers/", payload);
+  suppliers.value.push(data);
+  purchase.value.supplier = data.id;
+  purchase.value.supplier_name_raw = data.name;
+  newSupplierDraft.value.open = false;
+}
+
+// ---------------------------------------------------------------- 자재
+
 function openNewMaterial(idx) {
   newMaterialDrafts.value[idx] = {
     open: true,
     name: items.value[idx].raw_name || "",
-    unit: "",
+    unit: items.value[idx].unit || "",
   };
 }
 
@@ -145,6 +215,8 @@ async function createMaterial(idx) {
   newMaterialDrafts.value[idx].open = false;
 }
 
+// ---------------------------------------------------------------- 저장/확정
+
 async function save() {
   saving.value = true;
   saveMessage.value = "";
@@ -153,6 +225,7 @@ async function save() {
     const payload = {
       document_date: purchase.value.document_date || null,
       document_number: purchase.value.document_number,
+      supplier: purchase.value.supplier || null,
       supplier_name_raw: purchase.value.supplier_name_raw,
       note: purchase.value.note,
       total_amount: totalAmount.value,
@@ -188,7 +261,7 @@ async function confirmPurchase() {
     const { data } = await client.post(`/purchases/${route.params.id}/confirm/`);
     purchase.value = data;
     editMode.value = false;
-    saveMessage.value = "확정되었습니다.";
+    saveMessage.value = "확정되었습니다. 같은 거래처·품목명은 다음부터 자동으로 연결됩니다.";
   } catch (e) {
     error.value = "확정에 실패했습니다.";
   } finally {
@@ -246,7 +319,6 @@ async function reparsePurchase() {
     reparsing.value = false;
   }
 }
-
 
 async function togglePreview() {
   if (previewOpen.value) {
@@ -336,6 +408,20 @@ onMounted(load);
       <div v-if="isConfirmed && editMode" class="banner ok">
         수정 모드 — 저장 시 확정 상태는 유지됩니다.
       </div>
+      <!-- 등록 미해소 안내 -->
+      <div
+        v-if="unresolvedItemCount > 0 || (!purchase.supplier && purchase.supplier_name_raw)"
+        class="banner warn"
+      >
+        <template v-if="!purchase.supplier && purchase.supplier_name_raw">
+          거래처가 아직 등록되지 않았습니다 —
+          아래 공급업체 선택에서 기존 거래처를 고르거나 「+」로 새로 등록하세요.
+        </template>
+        <template v-if="unresolvedItemCount > 0">
+          자재가 연결되지 않은 품목이 {{ unresolvedItemCount }}건 있습니다 —
+          확정하면 같은 품목명은 다음부터 자동으로 연결됩니다.
+        </template>
+      </div>
 
       <!-- 세로 배치: 원본 문서 → 공급업체/품목 (공간 절약) -->
       <section class="preview-block">
@@ -382,10 +468,88 @@ onMounted(load);
       </section>
 
       <section class="form">
+        <!-- 명세서에서 파싱한 거래처 정보 (제안값) -->
+        <div v-if="!purchase.supplier && Object.keys(supplierDraft).some((k) => supplierDraft[k])" class="draft-panel">
+          <p class="section-title">명세서 표기 정보 (AI 제안 — 등록 전 확인)</p>
+          <dl class="draft-list">
+            <div v-for="(label, key) in SUPPLIER_DRAFT_LABELS" :key="key" v-show="supplierDraft[key]">
+              <dt>{{ label }}</dt>
+              <dd>{{ supplierDraft[key] }}</dd>
+            </div>
+          </dl>
+          <button v-if="!isLocked" class="ghost small" type="button" @click="openNewSupplier">
+            이 정보로 새 거래처 등록
+          </button>
+        </div>
+
         <div class="field-row">
           <label>
             <span>공급업체</span>
-            <input v-model="purchase.supplier_name_raw" type="text" :disabled="isLocked" />
+            <template v-if="!newSupplierDraft.open">
+              <div class="map-controls">
+                <select
+                  v-model="purchase.supplier"
+                  :disabled="isLocked"
+                  @change="onSupplierChange"
+                >
+                  <option :value="null">— 미지정 —</option>
+                  <optgroup
+                    v-if="purchase.supplier_candidates?.length"
+                    label="추천 거래처"
+                  >
+                    <option
+                      v-for="c in purchase.supplier_candidates"
+                      :key="c.id"
+                      :value="c.id"
+                    >
+                      {{ c.name
+                      }}{{ c.matched_by === "bizno"
+                        ? " (사업자번호 일치)"
+                        : c.matched_by === "alias"
+                          ? " (이전 연결)"
+                          : ` (${Math.round(c.score * 100)}%)` }}
+                      {{ c.business_number ? `[${c.business_number}]` : "" }}
+                    </option>
+                  </optgroup>
+                  <optgroup label="전체 거래처">
+                    <option v-for="s in suppliers" :key="s.id" :value="s.id">
+                      {{ s.name }}{{ s.business_number ? ` [${s.business_number}]` : "" }}
+                    </option>
+                  </optgroup>
+                </select>
+                <button
+                  v-if="!isLocked"
+                  class="link"
+                  type="button"
+                  @click="openNewSupplier"
+                >
+                  +
+                </button>
+              </div>
+              <small v-if="!purchase.supplier && purchase.supplier_name_raw" class="hint">
+                문서 표기: {{ purchase.supplier_name_raw }}
+              </small>
+            </template>
+            <template v-else>
+              <!-- 새 거래처 등록 폼: 파싱값이 채워져 있고, 사람이 확인/수정 후 등록 -->
+              <div class="supplier-create">
+                <div class="map-controls">
+                  <input v-model="newSupplierDraft.name" type="text" placeholder="거래처명 *" />
+                  <input v-model="newSupplierDraft.business_number" type="text" placeholder="사업자번호" />
+                  <input v-model="newSupplierDraft.representative" type="text" placeholder="대표자" />
+                </div>
+                <div class="map-controls">
+                  <input v-model="newSupplierDraft.phone" type="text" placeholder="전화번호" />
+                  <input v-model="newSupplierDraft.fax" type="text" placeholder="팩스" />
+                  <input v-model="newSupplierDraft.email" type="text" placeholder="이메일" />
+                </div>
+                <div class="map-controls">
+                  <input v-model="newSupplierDraft.address" type="text" placeholder="사업장 주소" />
+                  <button class="link" type="button" @click="createSupplier">등록</button>
+                  <button class="link danger" type="button" @click="newSupplierDraft.open = false">취소</button>
+                </div>
+              </div>
+            </template>
           </label>
           <label class="narrow">
             <span>거래일자</span>
@@ -402,14 +566,17 @@ onMounted(load);
           <article v-for="(it, idx) in items" :key="idx" class="item-card">
             <div class="item-card-head">
               <span class="item-idx">{{ idx + 1 }}</span>
-              <button
-                v-if="!isLocked"
-                class="link danger"
-                type="button"
-                @click="removeRow(idx)"
-              >
-                삭제
-              </button>
+              <span class="head-tags">
+                <span v-if="!it.material" class="tag-unmapped">자재 미연결</span>
+                <button
+                  v-if="!isLocked"
+                  class="link danger"
+                  type="button"
+                  @click="removeRow(idx)"
+                >
+                  삭제
+                </button>
+              </span>
             </div>
 
             <div class="row row-main">
@@ -427,9 +594,26 @@ onMounted(load);
                   <div class="map-controls">
                     <select v-model="it.material" :disabled="isLocked">
                       <option :value="null">— 미매핑 —</option>
-                      <option v-for="m in materials" :key="m.id" :value="m.id">
-                        {{ m.name }}
-                      </option>
+                      <optgroup
+                        v-if="it.material_candidates?.length"
+                        label="추천 자재"
+                      >
+                        <option
+                          v-for="c in it.material_candidates"
+                          :key="c.id"
+                          :value="c.id"
+                        >
+                          {{ c.name
+                          }}{{ c.matched_by === "alias"
+                            ? " (이전 연결)"
+                            : ` (${Math.round(c.score * 100)}%)` }}
+                        </option>
+                      </optgroup>
+                      <optgroup label="전체 자재">
+                        <option v-for="m in materials" :key="m.id" :value="m.id">
+                          {{ m.name }}
+                        </option>
+                      </optgroup>
                     </select>
                     <button
                       v-if="!isLocked"
@@ -447,6 +631,12 @@ onMounted(load);
                       v-model="newMaterialDrafts[idx].name"
                       type="text"
                       placeholder="자재명"
+                    />
+                    <input
+                      v-model="newMaterialDrafts[idx].unit"
+                      type="text"
+                      placeholder="단위"
+                      class="unit-input"
                     />
                     <button class="link" type="button" @click="createMaterial(idx)">OK</button>
                   </div>
@@ -623,6 +813,11 @@ onMounted(load);
   color: var(--ledger);
 }
 
+.banner.warn {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .empty {
   color: var(--muted);
   font-size: 14px;
@@ -759,6 +954,26 @@ onMounted(load);
   font-weight: 600;
 }
 
+.head-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-unmapped {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .item-card label {
   display: flex;
   flex-direction: column;
@@ -819,6 +1034,10 @@ onMounted(load);
   min-width: 0;
 }
 
+.map-controls .unit-input {
+  flex: 0 0 56px;
+}
+
 .link {
   background: none;
   border: none;
@@ -863,6 +1082,7 @@ h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
 .banner { border-radius: var(--radius-md); padding: 12px 14px; }
 .banner.error { border: 1px solid #fecaca; background: var(--stamp-bg); color: var(--stamp); }
 .banner.ok { border: 1px solid #bbf7d0; background: var(--success-bg); color: var(--success); }
+.banner.warn { border: 1px solid #fde68a; background: var(--warning-bg); color: var(--warning); }
 .preview-block, .form, .preview-body, .item-card {
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
@@ -882,6 +1102,7 @@ input:disabled, select:disabled { background: #f8fafc; color: var(--muted); }
 .item-card + .item-card { margin-top: 12px; }
 .item-card-head { color: var(--muted); }
 .item-idx { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 999px; background: var(--ledger-bg); color: var(--ledger); font-size: 12px; font-weight: 700; }
+.tag-unmapped { background: var(--warning-bg); color: var(--warning); }
 .link { color: var(--ledger); }
 .link.danger { color: var(--stamp); }
 @media (max-width: 720px) {
@@ -890,5 +1111,42 @@ input:disabled, select:disabled { background: #f8fafc; color: var(--muted); }
   h1 { font-size: 23px; }
   .preview-block, .form { padding: 16px; border-radius: var(--radius-md); }
   .field-row, .row { gap: 10px; }
+}
+</style>
+
+
+<style scoped>
+/* 명세서 표기 정보 패널 + 거래처 생성 폼 */
+.draft-panel {
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-md);
+  background: #fffbeb;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.draft-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin: 0 0 10px;
+}
+.draft-list div {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+.draft-list dt {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.draft-list dd {
+  margin: 0;
+  color: var(--ink);
+}
+.supplier-create {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 </style>

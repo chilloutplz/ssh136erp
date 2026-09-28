@@ -1,7 +1,8 @@
 import logging
 from pathlib import Path
 
-from django.db import connection
+from django.db import connection, models
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -9,29 +10,61 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Material, MaterialAlias, Purchase, PurchaseItem, Supplier
+from .models import (
+    Material,
+    MaterialAlias,
+    Purchase,
+    PurchaseItem,
+    Supplier,
+    SupplierAlias,
+)
 from .serializers import (
     MaterialSerializer,
     PurchaseDetailSerializer,
     PurchaseListSerializer,
     SupplierSerializer,
 )
+from .services import matching
 from .services.llm_parser import LLMParseError, parse_document
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------- 매칭
+
 def _match_material(raw_name: str, supplier: Supplier | None) -> Material | None:
-    """예전에 매핑해둔 별칭(MaterialAlias)이 있으면 자동 연결."""
+    """예전에 사람이 매핑핵둔 별칭(MaterialAlias)이 있으면 자동 연결.
+
+    비교 시 띄어쓰기/괄호/대소문자 차이를 무시한다.
+    유사도 기반 추측 연결은 하지 않는다. 그건 후보로만 제시한다.
+    """
     if not raw_name:
         return None
-    qs = MaterialAlias.objects.filter(raw_name=raw_name)
+    raw_norm = matching.normalize_text(raw_name)
+    qs = MaterialAlias.objects.select_related("material").all()
     if supplier:
-        alias = qs.filter(supplier=supplier).first() or qs.filter(supplier__isnull=True).first()
+        aliases = [a for a in qs if a.supplier_id in (supplier.id, None)]
     else:
-        alias = qs.first()
-    return alias.material if alias else None
+        aliases = list(qs)
+    for alias in aliases:
+        if matching.normalize_text(alias.raw_name) == raw_norm:
+            return alias.material
+    return None
 
+
+def _match_supplier(parsed: dict) -> Supplier | None:
+    """사람이 과거에 연결한 별칭 / 사업자번호 / 정규화 완전 일치만 자동 연결.
+    그 외는 None — 후보 목록으로만 제시한다."""
+    supplier_block = parsed.get("supplier") or {}
+    return matching.supplier_exact_match(
+        supplier_block.get("name") or parsed.get("supplier_name") or "",
+        supplier_block.get("business_number") or "",
+        Supplier.objects.all(),
+        SupplierAlias.objects.select_related("supplier").all(),
+    )
+
+
+# ---------------------------------------------------------------- 시퀀스 정리
 
 def _reset_table_id_sequence(table: str) -> None:
     """
@@ -75,16 +108,31 @@ def _reset_purchase_id_sequence() -> None:
     _reset_table_id_sequence(PurchaseItem._meta.db_table)
 
 
+# ---------------------------------------------------------------- 파싱 반영
+
+def _supplier_draft_from(parsed: dict) -> dict:
+    """LLM 응답의 supplier 블록(구형 supplier_name 호환)을 supplier_draft 표준 형태로 변환."""
+    block = parsed.get("supplier") or {}
+    return {
+        "name": (block.get("name") or parsed.get("supplier_name") or "").strip(),
+        "business_number": (block.get("business_number") or "").strip(),
+        "representative": (block.get("representative") or "").strip(),
+        "phone": (block.get("phone") or "").strip(),
+        "fax": (block.get("fax") or "").strip(),
+        "email": (block.get("email") or "").strip(),
+        "address": (block.get("address") or "").strip(),
+    }
+
 
 def _apply_parsed(purchase: Purchase, parsed: dict) -> None:
     """LLM 파싱 결과를 Purchase / PurchaseItem 에 반영 (기존 items 는 삭제 후 재생성)."""
     purchase.items.all().delete()
 
-    supplier_name = (parsed.get("supplier_name") or "").strip()
-    supplier = Supplier.objects.filter(name=supplier_name).first() if supplier_name else None
+    draft = _supplier_draft_from(parsed)
+    purchase.supplier_draft = draft
+    purchase.supplier = _match_supplier(parsed)
+    purchase.supplier_name_raw = draft["name"]
 
-    purchase.supplier = supplier
-    purchase.supplier_name_raw = supplier_name
     purchase.document_date = parsed.get("document_date") or None
     purchase.document_number = parsed.get("document_number") or ""
     purchase.supply_amount = int(parsed.get("supply_amount") or 0)
@@ -107,7 +155,7 @@ def _apply_parsed(purchase: Purchase, parsed: dict) -> None:
 
     for idx, item in enumerate(items):
         raw_name = (item.get("name") or "").strip()
-        material = _match_material(raw_name, supplier)
+        material = _match_material(raw_name, purchase.supplier)
         PurchaseItem.objects.create(
             purchase=purchase,
             sequence=idx,
@@ -120,6 +168,8 @@ def _apply_parsed(purchase: Purchase, parsed: dict) -> None:
             material=material,
         )
 
+
+# ---------------------------------------------------------------- 업로드
 
 class PurchaseUploadView(APIView):
     """
@@ -168,10 +218,10 @@ class PurchaseUploadView(APIView):
         )
 
 
-
+# ---------------------------------------------------------------- 목록/상세
 
 class PurchaseListView(APIView):
-    """GET /api/purchases/?status=&document_date_from=&document_date_to="""
+    """GET /api/purchases/?status=&document_date_from=&document_date_to=&unresolved=1"""
 
     permission_classes = [IsAuthenticated]
 
@@ -180,12 +230,20 @@ class PurchaseListView(APIView):
         status_param = request.query_params.get("status")
         date_from = request.query_params.get("document_date_from")
         date_to = request.query_params.get("document_date_to")
+        unresolved = request.query_params.get("unresolved")
+
         if status_param:
             qs = qs.filter(status=status_param)
         if date_from:
             qs = qs.filter(document_date__gte=date_from)
         if date_to:
             qs = qs.filter(document_date__lte=date_to)
+        if unresolved == "1":
+            # 등록 미해소: 거래처가 지정 안 됐거나, 품목 중 Material 이 안 연결된 건
+            qs = qs.filter(
+                Q(supplier__isnull=True)
+                | Q(items__material__isnull=True)
+            ).distinct()
         qs = qs[:200]
         return Response(PurchaseListSerializer(qs, many=True).data)
 
@@ -194,7 +252,7 @@ class PurchaseDetailView(APIView):
     """
     GET    /api/purchases/<id>/   상세(품목 포함) 조회
     PATCH  /api/purchases/<id>/   검토 중 수정 (items 통째 교체 가능)
-    DELETE /api/purchases/<id>/   삭제 (확정 건은 불가) + id 시퀀스 정리
+    DELETE /api/purchases/<id>/   삭제 + id 시퀀스 정리
     """
 
     permission_classes = [IsAuthenticated]
@@ -216,7 +274,6 @@ class PurchaseDetailView(APIView):
         purchase = self.get_object(pk)
         if not purchase:
             return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
-        # 확정 전표도 수정 가능 (프론트 수정모드). 상태(CONFIRMED)는 유지.
         serializer = PurchaseDetailSerializer(
             purchase, data=request.data, partial=True, context={"request": request}
         )
@@ -228,7 +285,6 @@ class PurchaseDetailView(APIView):
         purchase = self.get_object(pk)
         if not purchase:
             return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
-        # 확정 전표도 삭제 허용 (프론트 수정모드에서 호출)
 
         # 업로드 파일 제거 (스토리지에 남는 것 방지)
         _delete_preview_images(purchase)
@@ -243,11 +299,15 @@ class PurchaseDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# ---------------------------------------------------------------- 확정/재파싱
+
 class PurchaseConfirmView(APIView):
     """
     POST /api/purchases/<id>/confirm/
-    검토를 마치고 확정한다. 이 시점에 품목별로 매핑된 Material 이 있으면
-    다음에 같은 품목명이 나왔을 때 자동 매칭되도록 MaterialAlias 를 남긴다.
+    검토를 마치고 확정한다. 이 시점에 선택된 연결을 남겨
+    다음부터 자동 매칭되도록 한다.
+      - 품목↔자재 연결 → MaterialAlias
+      - 거래처 표기명 → SupplierAlias
     """
 
     permission_classes = [IsAuthenticated]
@@ -269,12 +329,16 @@ class PurchaseConfirmView(APIView):
                     defaults={"material": item.material},
                 )
 
+        if purchase.supplier and purchase.supplier_name_raw:
+            SupplierAlias.objects.get_or_create(
+                supplier=purchase.supplier,
+                raw_name=purchase.supplier_name_raw,
+            )
+
         purchase.status = Purchase.Status.CONFIRMED
         purchase.confirmed_at = timezone.now()
         purchase.save(update_fields=["status", "confirmed_at"])
         return Response(PurchaseDetailSerializer(purchase, context={"request": request}).data)
-
-
 
 
 class PurchaseReparseView(APIView):
@@ -342,6 +406,8 @@ class PurchaseReparseView(APIView):
             PurchaseDetailSerializer(purchase, context={"request": request}).data,
         )
 
+
+# ---------------------------------------------------------------- 미리보기
 
 def _purchase_preview_dir(purchase: Purchase) -> Path:
     from django.conf import settings
@@ -436,6 +502,7 @@ class PurchasePreviewView(APIView):
         return Response({"images": images, "count": len(images)})
 
 
+# ---------------------------------------------------------------- 마스터
 
 class MaterialListCreateView(APIView):
     """GET/POST /api/purchases/materials/ — 자재 마스터 목록/생성 (검토 화면 자동완성용)"""

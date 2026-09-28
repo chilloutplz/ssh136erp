@@ -11,6 +11,8 @@ const error = ref("");
 const uploading = ref(false);
 const uploadError = ref("");
 const fileInput = ref(null);
+/** 등록 미해소(거래처 미지정/자재 미연결) 건 만 보기 */
+const unresolvedOnly = ref(false);
 
 const STATUS_LABEL = {
   UPLOADED: "업로드중",
@@ -33,13 +35,19 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const { data } = await client.get("/purchases/");
+    const params = unresolvedOnly.value ? { unresolved: "1" } : {};
+    const { data } = await client.get("/purchases/", { params });
     purchases.value = data;
   } catch (e) {
     error.value = "매입 목록을 불러오지 못했습니다.";
   } finally {
     loading.value = false;
   }
+}
+
+function toggleUnresolved() {
+  unresolvedOnly.value = !unresolvedOnly.value;
+  load();
 }
 
 function triggerUpload() {
@@ -75,6 +83,14 @@ onMounted(load);
     <header class="topbar">
       <h1>자재매입</h1>
       <div class="topbar-right">
+        <button
+          class="ghost filter-btn"
+          :class="{ active: unresolvedOnly }"
+          type="button"
+          @click="toggleUnresolved"
+        >
+          {{ unresolvedOnly ? "미해소만 보기 ✕" : "미해소만 보기" }}
+        </button>
         <input
           ref="fileInput"
           type="file"
@@ -90,6 +106,9 @@ onMounted(load);
 
     <div v-if="uploadError" class="banner error">{{ uploadError }}</div>
     <div v-if="error" class="banner error">{{ error }}</div>
+    <div v-if="unresolvedOnly && !loading && !purchases.length" class="banner ok">
+      등록 미해소 건이 없습니다. 모든 거래처·자재가 연결되어 있습니다.
+    </div>
 
     <section class="list-section">
       <div v-if="loading" class="empty">불러오는 중...</div>
@@ -117,7 +136,7 @@ onMounted(load);
           </tr>
         </tbody>
       </table>
-      <p v-else class="empty">아직 등록된 매입 전표가 없습니다. 위 버튼으로 거래명세서를 업로드해보세요.</p>
+      <p v-else-if="!unresolvedOnly" class="empty">아직 등록된 매입 전표가 없습니다. 위 버튼으로 거래명세서를 업로드해보세요.</p>
     </section>
   </div>
 </template>
@@ -139,6 +158,29 @@ onMounted(load);
 h1 {
   margin: 0;
   font-size: 24px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  background: none;
+  border: 1px solid var(--rule);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.filter-btn.active {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: var(--warning-bg);
+  font-weight: 600;
 }
 
 .hidden-input {
@@ -167,6 +209,14 @@ h1 {
 .banner.error {
   background: var(--stamp-bg);
   color: var(--stamp);
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.banner.ok {
+  background: var(--success-bg);
+  color: var(--success);
   padding: 10px 14px;
   font-size: 13px;
   margin-bottom: 20px;
@@ -240,6 +290,7 @@ h1 {
 .page { max-width: 1280px; padding: 32px 32px 64px; }
 .topbar { margin-bottom: 22px; }
 h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
+.filter-btn { border-radius: var(--radius-sm); }
 .primary {
   border: 0;
   border-radius: var(--radius-sm);
@@ -250,6 +301,7 @@ h1 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
 }
 .primary:hover:not(:disabled) { background: #1d4ed8; }
 .banner.error { border: 1px solid #fecaca; border-radius: var(--radius-md); background: var(--stamp-bg); padding: 12px 14px; }
+.banner.ok { border: 1px solid #bbf7d0; border-radius: var(--radius-md); background: var(--success-bg); padding: 12px 14px; }
 .list-section { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-card); padding: 8px; }
 .purchase-table { border-radius: var(--radius-md); overflow: hidden; }
 .purchase-table th { background: #f8fafc; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 13px 14px; border-bottom: 1px solid var(--rule); }

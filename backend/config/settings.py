@@ -1,6 +1,7 @@
 from pathlib import Path
-
 from decouple import Csv, config
+from corsheaders.defaults import default_headers, default_methods
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,13 +34,19 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # 로컬 개발 기본값은 vite dev 서버(5173), 배포 시 .env 에 실제 frontend 도메인을 넣어줄 것.
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS', 
-    default='http://localhost:5173,http://localhost:3000', 
+    default='http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000', 
     cast=Csv()
 )
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = ["*"]
-CORS_ALLOW_METHODS = ["*"]
+# 와일드카드 금지! 기본값 + 필요한 헤더 명시
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+    "content-type",
+    "x-csrftoken",
+]
+
+CORS_ALLOW_METHODS = list(default_methods)
 
 # Application definition
 

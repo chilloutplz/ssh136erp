@@ -2,10 +2,16 @@ from django.db import models
 
 
 class Supplier(models.Model):
-    """거래명세서를 보내는 공급업체."""
+    """거래명세서를 볼내는 공급업체. 연락처는 명세서 파싱값을
+    검토 단계에서 사람이 확인한 뒤 저장한다 (human-in-the-loop)."""
 
     name = models.CharField(max_length=100, unique=True)
     business_number = models.CharField(max_length=20, blank=True, default="")
+    representative = models.CharField(max_length=50, blank=True, default="")  # 대표자명
+    phone = models.CharField(max_length=30, blank=True, default="")
+    fax = models.CharField(max_length=30, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    address = models.CharField(max_length=255, blank=True, default="")  # 사업장 주소
     memo = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -18,10 +24,36 @@ class Supplier(models.Model):
         return self.name
 
 
+class SupplierAlias(models.Model):
+    """
+    문서에 실제로 찍힌 거래처 표기명 → Supplier 매핑.
+    사람이 한 번 연결한 표기명(예: '(주)본네이처', '본네이처물산')은
+    다음부터 자동으로 같은 거래처로 연결된다. 자동 생성은 없다.
+    """
+
+    supplier = models.ForeignKey(
+        Supplier, related_name="aliases", on_delete=models.CASCADE,
+        null=True, blank=True,
+    )
+    raw_name = models.CharField(max_length=200)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["supplier", "raw_name"], name="uniq_supplier_alias_rawname"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.raw_name} → {self.supplier.name}"
+
+
 class Material(models.Model):
     """
     공통 자재 마스터. 같은 재료(예: 광어)를 서로 다른 공급업체가
-    다른 이름으로 보내와도 여기서 하나로 묶어 관리한다.
+    다른 이름으로 볼내와도 여기서 하나로 묶어 관리한다.
     추후 BOM(레시피)에서 이 Material 을 참조하게 된다.
     """
 
@@ -83,7 +115,7 @@ class Purchase(models.Model):
         null=True, blank=True,
     )
     supplier_name_raw = models.CharField(max_length=200, blank=True, default="")
-
+    supplier_draft = models.JSONField(null=True, blank=True)
     document_date = models.DateField(null=True, blank=True)
     document_number = models.CharField(max_length=100, blank=True, default="")
 
