@@ -1,58 +1,81 @@
-/** 채널 원본값(PLUGIN_BAEMIN 등) → 화면용 짧은 표시 */
+/**
+ * 채널 표시/분류 유틸.
+ *
+ * 백엔드(mapper.py/matepos.py)가 이미 channel 값을 정규화된 한글명
+ * ("배민", "쿠팡", "요기요", "땡겨요", "내점(POS)", "내점(테이블)")으로 저장한다.
+ * 여기서는 그 값을 기준으로 분류/색상/약어를 판정한다.
+ *
+ * LEGACY_RAW_TO_NAME 은 혹시 정규화 전 원본 코드값(PLUGIN_BAEMIN 등)이
+ * 섞여 들어오는 경우를 위한 안전망이다 — 정상 운영 중이라면 거의 안 쓰인다.
+ */
 
-const CHANNEL_MAP = {
-  PLUGIN_BAEMIN: { label: "배민", icon: "🛵", className: "ch-baemin" },
-  PLUGIN_COUPANGEATS: { label: "쿠팡", icon: "📦", className: "ch-coupang" },
-  PLUGIN_YOGIYO: { label: "요기요", icon: "🍔", className: "ch-yogiyo" },
-  PLUGIN_DDANGYO: { label: "땡겨요", icon: "🥡", className: "ch-etc" },
-  PLUGIN_KARROT: { label: "당근", icon: "🥕", className: "ch-etc" },
-  PLUGIN_CARROT: { label: "당근", icon: "🥕", className: "ch-etc" },
-  TABLE_ORDER: { label: "Table Order", icon: "🍽️", className: "ch-table" },
-  POS: { label: "POS", icon: "🏪", className: "ch-pos" },
+const LEGACY_RAW_TO_NAME = {
+  BAEMIN: "배민",
+  CPEATS: "쿠팡",
+  YOGIYO: "요기요",
+  DKY: "땡겨요",
+  POS: "내점(POS)",
+  PLUGIN_BAEMIN: "배민",
+  PLUGIN_COUPANGEATS: "쿠팡",
+  PLUGIN_YOGIYO: "요기요",
+  PLUGIN_DDANGYO: "땡겨요",
+  PLUGIN_KARROT: "당근",
+  PLUGIN_CARROT: "당근",
+  TABLE_ORDER: "내점(테이블)",
 };
 
+const DELIVERY_NAMES = new Set(["배민", "쿠팡", "요기요", "땡겨요", "당근"]);
+
+const SHORT_MAP = {
+  배민: "배",
+  쿠팡: "쿠",
+  요기요: "요",
+  땡겨요: "땡",
+  당근: "당",
+  내점: "내",
+};
+
+/** 원본값을 정규화된 표시명으로. 이미 정규화된 값이면 그대로 통과. */
+function toDisplayName(raw) {
+  if (!raw) return "";
+  const s = String(raw);
+  return LEGACY_RAW_TO_NAME[s] || s;
+}
+
 export function channelMeta(raw) {
-  if (!raw) return { label: "미지정", icon: "•", className: "ch-etc" };
-  if (CHANNEL_MAP[raw]) return CHANNEL_MAP[raw];
-  if (String(raw).startsWith("PLUGIN_")) {
-    const rest = String(raw).slice(7).replace(/EATS$/i, "");
-    return { label: rest, icon: "🛵", className: "ch-etc" };
-  }
-  return { label: String(raw), icon: "•", className: "ch-etc" };
+  const name = toDisplayName(raw);
+  if (!name) return { label: "미지정", icon: "•", className: "ch-etc" };
+  if (name === "배민") return { label: name, icon: "🛵", className: "ch-baemin" };
+  if (name === "쿠팡") return { label: name, icon: "📦", className: "ch-coupang" };
+  if (name === "요기요") return { label: name, icon: "🍔", className: "ch-yogiyo" };
+  if (name === "땡겨요") return { label: name, icon: "🥡", className: "ch-etc" };
+  if (name === "당근") return { label: name, icon: "🥕", className: "ch-etc" };
+  if (name.startsWith("내점")) return { label: name, icon: "🍽️", className: "ch-table" };
+  return { label: name, icon: "•", className: "ch-etc" };
 }
 
 export function channelLabel(raw) {
   return channelMeta(raw).label;
 }
 
-/** 내점/배달 구분 — TABLE_ORDER·POS 는 모두 내점 */
+/** 내점/배달 구분 — "내점(...)"으로 시작하면 내점, 배달앱 이름이면 배달 */
 export function businessType(raw) {
-  const value = String(raw || "").toUpperCase();
-  if (value === "POS" || value === "TABLE_ORDER") return "내점";
-  if (value.startsWith("PLUGIN_")) return "배달";
+  const name = toDisplayName(raw);
+  if (name.startsWith("내점")) return "내점";
+  if (DELIVERY_NAMES.has(name)) return "배달";
   return "기타";
 }
 
-/** 주문 목록용: POS·TABLE_ORDER → 내점, 그 외는 channelLabel */
+/** 주문 목록용: 내점 계열은 "내점"으로 뭉치고, 그 외는 channelLabel 그대로 */
 export function orderListChannelLabel(raw) {
   if (businessType(raw) === "내점") return "내점";
   return channelLabel(raw);
 }
 
-/** 주문 목록 좁은 칸용 한 글자 */
+/** 주문 목록 좁은 칸용 한 글자 — 기본적으로 표시명 첫 글자 */
 export function orderListChannelShort(raw) {
   const full = orderListChannelLabel(raw);
-  const map = {
-    배민: "배",
-    쿠팡: "쿠",
-    요기요: "요",
-    땡겨요: "땡",
-    당근: "당",
-    내점: "내",
-    "Table Order": "T",
-    POS: "P",
-  };
-  if (map[full]) return map[full];
+  if (SHORT_MAP[full]) return SHORT_MAP[full];
   return full ? full[0] : "·";
 }
 
@@ -81,18 +104,18 @@ export function orderCode(raw) {
 }
 
 /**
- * 채널별 형광펜(배경) 클래스 — 브랜드 연상 파스텔
- * 배민 민트 / 쿠팡 블루 / 요기요 핑크 등
+ * 채널별 형광펜(배경) 클래스 — 브랜드 연상 파스텔.
+ * CSS 클래스명(ch-hl-*)은 기존 그대로 유지, 매칭 기준만 정규화된 한글명으로 변경.
  */
 export function channelHighlightClass(raw) {
-  const v = String(raw || "").toUpperCase();
-  if (v === "PLUGIN_BAEMIN") return "ch-hl-baemin";
-  if (v === "PLUGIN_COUPANGEATS" || v.includes("COUPANG")) return "ch-hl-coupang";
-  if (v === "PLUGIN_YOGIYO") return "ch-hl-yogiyo";
-  if (v === "PLUGIN_DDANGYO") return "ch-hl-ddangyo";
-  if (v.includes("KARROT") || v.includes("CARROT") || v.includes("당근")) return "ch-hl-carrot";
-  if (v === "TABLE_ORDER") return "ch-hl-table";
-  if (v === "POS") return "ch-hl-pos";
-  if (v.startsWith("PLUGIN_")) return "ch-hl-etc";
+  const name = toDisplayName(raw);
+  if (name === "배민") return "ch-hl-baemin";
+  if (name === "쿠팡") return "ch-hl-coupang";
+  if (name === "요기요") return "ch-hl-yogiyo";
+  if (name === "땡겨요") return "ch-hl-ddangyo";
+  if (name === "당근") return "ch-hl-carrot";
+  if (name === "내점(POS)") return "ch-hl-pos";
+  if (name === "내점(테이블)") return "ch-hl-table";
+  if (name.startsWith("내점")) return "ch-hl-pos";
   return "ch-hl-etc";
 }

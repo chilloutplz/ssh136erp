@@ -10,6 +10,9 @@ matepos.py 의 map_sale / map_item / map_tender 와 동일한 출력 스키마�
    추후 재계산/보정이 가능하도록 한다.
 """
 from datetime import datetime
+from common.channel_names import normalize_channel
+
+OFFLINE_SOURCES = {"POS", "TABLE_ORDER", "KIOSK"}
 
 DINING_OPTION_MAP = {
     "HERE": "내점",
@@ -60,8 +63,8 @@ def map_order(order: dict, store_code: str, store_name: str = "") -> dict:
         "business_date": _to_business_date(order.get("createdAt")),
         "sold_at": order.get("completedAt") or order.get("createdAt"),
         "channel_order_no": order.get("orderNumber"),
-        "order_category": "오프라인" if order.get("source") == "POS" else "온라인",
-        "channel": order.get("source", ""),
+        "order_category": "오프라인" if order.get("source") in OFFLINE_SOURCES else "온라인",
+        "channel": normalize_channel(order.get("source", "")),
         "channel_detail": "",
         "order_type": DINING_OPTION_MAP.get(dining_option, dining_option or ""),
         "payment_status": {
@@ -74,7 +77,7 @@ def map_order(order: dict, store_code: str, store_name: str = "") -> dict:
         "discount_amount": abs(int(charge.get("discountAmount") or 0)),
         "net_sale_amount": int(charge.get("totalAmount") or 0),
         "channel_delivery_fee": 0,
-        "channel_discount": 0,
+        "channel_discount": sum(int(d.get("amount") or 0) for d in (order.get("discounts") or [])),
         "actual_sale_amount": int(charge.get("totalAmount") or 0),
         "taxable_amount": int(charge.get("supplyAmount") or 0),
         "vat": int(charge.get("taxAmount") or 0),

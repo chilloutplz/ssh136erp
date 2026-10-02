@@ -9,6 +9,7 @@ import asyncio
 from datetime import date, timedelta
 import os, sys
 from decouple import config
+from common.channel_names import normalize_channel
 
 # ── 설정 ─────────────────────────────────────────────────────
 MATEPOS_BASE = "https://www.matetech.co.kr"
@@ -202,7 +203,7 @@ def map_sale(detail: dict) -> dict:
         "order_seq":            str(detail.get("trSeq") or ""),
         "channel_order_no":     _nullify(detail.get("displayChannelOrderNo")),
         "order_category":       "온라인" if detail.get("onlineOrderYn") == "Y" else "오프라인",
-        "channel":              detail.get("channelCd", "HALL"),
+        "channel":              normalize_channel(detail.get("channelCd", "HALL")),
         "channel_detail":       detail.get("webSalesGrpNm") or "",
         "order_type":           _map_order_type(detail.get("orderSp")),
         # cancelYn=Y 인 경우만 결제취소, 반품(returnYn=Y)은 결제완료로 처리
