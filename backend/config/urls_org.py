@@ -11,7 +11,6 @@ urlpatterns = [
     path('api/sales/', include('sales.urls')),
     path('api/integrations/', include('integrations.urls')),
     path('api/purchases/', include('purchases.urls')),
-    path('api/product-manuals/', include('manuals.urls')),
 ]
 
 # 로컬 개발 환경에서 업로드된 매입 전표 원본 파일 서빙용.

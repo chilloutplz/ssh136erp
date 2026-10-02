@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import client from "../api/client";
 import { authState, logout } from "../stores/auth";
 
 const router = useRouter();
@@ -24,6 +25,91 @@ const navGroups = [
     ],
   },
 ];
+
+/** 제품메뉴얼 (외부 링크) */
+const manuals = ref([]);
+const manualsLoading = ref(false);
+const manualsError = ref("");
+const showManualForm = ref(false);
+const manualForm = ref({ product_name: "", manual_url: "" });
+const manualSaving = ref(false);
+const manualFormError = ref("");
+
+async function loadManuals() {
+  manualsLoading.value = true;
+  manualsError.value = "";
+  try {
+    const { data } = await client.get("/product-manuals/");
+    manuals.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    manualsError.value = "메뉴얼 목록을 불러오지 못했습니다.";
+    manuals.value = [];
+  } finally {
+    manualsLoading.value = false;
+  }
+}
+
+function openManual(m) {
+  if (!m?.manual_url) return;
+  window.open(m.manual_url, "_blank", "noopener,noreferrer");
+  closeSidebar();
+}
+
+function openManualForm() {
+  manualForm.value = { product_name: "", manual_url: "https://" };
+  manualFormError.value = "";
+  showManualForm.value = true;
+}
+
+function closeManualForm() {
+  showManualForm.value = false;
+  manualFormError.value = "";
+}
+
+async function saveManual() {
+  manualFormError.value = "";
+  const name = manualForm.value.product_name?.trim();
+  const url = manualForm.value.manual_url?.trim();
+  if (!name) {
+    manualFormError.value = "제품 이름을 입력하세요.";
+    return;
+  }
+  if (!url || !url.startsWith("https://")) {
+    manualFormError.value = "링크는 https:// 로 시작해야 합니다.";
+    return;
+  }
+  manualSaving.value = true;
+  try {
+    const { data } = await client.post("/product-manuals/", {
+      product_name: name,
+      manual_url: url,
+      sort_order: (manuals.value.length + 1) * 10,
+    });
+    manuals.value = [...manuals.value, data].sort(
+      (a, b) => (a.sort_order - b.sort_order) || (a.id - b.id)
+    );
+    closeManualForm();
+  } catch (e) {
+    const d = e?.response?.data;
+    if (d?.product_name) manualFormError.value = [].concat(d.product_name).join(" ");
+    else if (d?.manual_url) manualFormError.value = [].concat(d.manual_url).join(" ");
+    else if (d?.detail) manualFormError.value = String(d.detail);
+    else manualFormError.value = "저장에 실패했습니다.";
+  } finally {
+    manualSaving.value = false;
+  }
+}
+
+async function deleteManual(m) {
+  if (!m?.id) return;
+  if (!window.confirm(`「${m.product_name}」 메뉴얼을 삭제할까요?`)) return;
+  try {
+    await client.delete(`/product-manuals/${m.id}/`);
+    manuals.value = manuals.value.filter((x) => x.id !== m.id);
+  } catch (e) {
+    window.alert("삭제에 실패했습니다.");
+  }
+}
 
 const activeNames = computed(() => {
   const n = route.name;
@@ -49,6 +135,7 @@ function closeSidebar() {
 }
 
 watch(() => route.fullPath, closeSidebar);
+onMounted(loadManuals);
 </script>
 
 <template>
@@ -72,7 +159,7 @@ watch(() => route.fullPath, closeSidebar);
       </div>
 
       <nav class="nav">
-        <div v-for="group in navGroups" :key="group.key" class="nav-group">
+        <div v-for="group in navGroups" :key="group.key" class="nav-group" :class="'g-' + group.key">
           <p class="nav-group-label">{{ group.label }}</p>
           <router-link
             v-for="item in group.items"
@@ -84,7 +171,87 @@ watch(() => route.fullPath, closeSidebar);
             {{ item.label }}
           </router-link>
         </div>
+
+        <div class="nav-group manuals-group">
+          <div class="nav-group-head">
+            <p class="nav-group-label manuals-label">제품메뉴얼</p>
+            <button
+              class="manual-add"
+              type="button"
+              title="메뉴얼 추가"
+              aria-label="메뉴얼 추가"
+              @click="openManualForm"
+            >
+              +
+            </button>
+          </div>
+
+          <p v-if="manualsLoading" class="manual-empty">불러오는 중...</p>
+          <p v-else-if="manualsError" class="manual-empty">{{ manualsError }}</p>
+          <p v-else-if="!manuals.length" class="manual-empty">등록된 메뉴얼이 없습니다</p>
+          <div v-else class="manual-list">
+            <div v-for="m in manuals" :key="m.id" class="manual-row">
+              <button
+                class="nav-item manual-link"
+                type="button"
+                :title="m.manual_url"
+                @click="openManual(m)"
+              >
+                {{ m.product_name }}
+              </button>
+              <button
+                class="manual-del"
+                type="button"
+                title="삭제"
+                aria-label="삭제"
+                @click.stop="deleteManual(m)"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
       </nav>
+
+      <!-- 메뉴얼 등록 팝업 -->
+      <div
+        v-if="showManualForm"
+        class="manual-modal-overlay"
+        @click.self="closeManualForm"
+      >
+        <div class="manual-modal" role="dialog" aria-label="메뉴얼 추가">
+          <h3>메뉴얼 추가</h3>
+          <label>
+            <span>제품 이름</span>
+            <input
+              v-model="manualForm.product_name"
+              type="text"
+              placeholder="예: 전어 미나리 가이드"
+              maxlength="100"
+            />
+          </label>
+          <label>
+            <span>링크 (https://)</span>
+            <input
+              v-model="manualForm.manual_url"
+              type="url"
+              placeholder="https://..."
+            />
+          </label>
+          <p v-if="manualFormError" class="manual-form-error">{{ manualFormError }}</p>
+          <div class="manual-modal-actions">
+            <button class="ghost" type="button" @click="closeManualForm">취소</button>
+            <button
+              class="primary"
+              type="button"
+              :disabled="manualSaving"
+              @click="saveManual"
+            >
+              {{ manualSaving ? "저장 중..." : "저장" }}
+            </button>
+          </div>
+        </div>
+      </div>
     </aside>
 
     <main class="content">
@@ -496,4 +663,204 @@ watch(() => route.fullPath, closeSidebar);
     font-size: 17px;
   }
 }
+
+.nav-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 8px;
+}
+
+/* 그룹 라벨 색 구분 */
+.g-sales > .nav-group-label {
+  color: #93c5fd;
+}
+.g-purchases > .nav-group-label {
+  color: #6ee7b7;
+}
+.manuals-group > .nav-group-head .nav-group-label {
+  color: #c4b5fd;
+}
+
+.manuals-label {
+  margin: 0;
+  flex: 1;
+}
+
+.manual-add {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.manual-add:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.manual-empty {
+  margin: 0;
+  padding: 8px 16px 12px;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.95);
+  line-height: 1.4;
+}
+
+.manual-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manual-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 일일매출 nav-item 과 동일 톤 */
+.manual-link.nav-item {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px 10px 16px;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #cbd5e1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.manual-link.nav-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.manual-del {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.8);
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.manual-del:hover {
+  opacity: 1;
+  color: #fca5a5;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.manual-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.manual-modal {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px 18px;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink, #0f172a);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.2);
+}
+
+.manual-modal h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.manual-modal label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--ink-soft, #334155);
+}
+
+.manual-modal label span {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.manual-modal input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--rule, #e2e8f0);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.manual-form-error {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+.manual-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.manual-modal-actions .ghost {
+  padding: 8px 12px;
+  border: 1px solid var(--rule, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.manual-modal-actions .primary {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.manual-modal-actions .primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 </style>
