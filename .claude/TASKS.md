@@ -4,11 +4,46 @@
 
 ## 지금 할 일 (In Progress / To Do)
 
-- [ ] matepos 할인값 매칭 추가
+- [ ] **신규 기능 - 제품메뉴얼 그룹 (DB + API)**
+  - 테이블: `product_manuals` (id, product_name, manual_url, sort_order, created_at, created_by)
+  - API:
+    - `GET /api/product-manuals` 목록 조회
+    - `POST /api/product-manuals` 생성
+    - `DELETE /api/product-manuals/{id}` 삭제
+  - 유효성 검사:
+    - manual_url은 https:// 로 시작
+    - product_name 중복 불가
+    - URL 형식 유효성 검사
+  - 확인: 마이그레이션 후 DB 테이블 생성 여부
+
+- [ ] **신규 기능 - 제품메뉴얼 그룹 (Frontend - 사이드 메뉴)**
+  - 사이드 메뉴에 `제품메뉴얼` 그룹 추가 (아이콘: book)
+  - DB에서 불러온 제품이름 리스트 렌더링 (sort_order 순)
+  - 클릭 시 `window.open(manual_url, '_blank')` 외부 새창 열림
+  - 데이터 없을 때 `등록된 메뉴얼이 없습니다` 표시
+  - 초기 데이터 예시:
+    - 전어 미나리 가이드: `https://seasonal-jeoneo-minari-guide.challoo.chatgpt.site/#order`
+    - 새우 가이드: `https://seasonal-shrimp-guide.challoo.chatgpt.site/`
+    - 치킨난반 가이드: `https://chicken-nanban-guide.challoo.chatgpt.site/`
+
+- [ ] **신규 기능 - 제품메뉴얼 그룹 (Frontend - 등록 팝업)**
+  - 사이드 메뉴 그룹 옆 `+` 버튼 또는 설정 페이지에 `추가` 버튼
+  - 팝업 구성: 제품 이름 input, 링크 input
+  - 저장 시 API 호출, 성공하면 사이드 메뉴 즉시 갱신 (invalidate query)
+  - 권한: 관리자만 추가/삭제 가능
+  - 삭제: 각 아이템 옆 휴지통 아이콘, confirm 후 삭제
+
+- [ ] **일일매출, 기간매출 데이터 로딩 표시 추가**
+  - 현상: 일일매출/기간매출 조회 시 데이터 로딩 중인지 구분이 안 돼서 빈 화면으로 보임
+  - 할 일: frontend 대시보드 - 일일 요약 카드, 기간매출 차트/테이블에 loading spinner 또는 skeleton UI 추가, API 호출 중 isLoading 상태 관리
+  - 확인 위치: `backend/sales` 집계 API 호출 구간, `frontend/src/views/Dashboard.vue` 또는 해당 컴포넌트
+
+- [ ] **matepos 할인값 매칭 추가**
   - 현상: tosspos는 discounts 합산해서 channel_discount에 넣는데, matepos는 0으로 비어있음
   - 할 일: matepos raw_data에서 할인 필드 찾아서 discount_amount / channel_discount에 매핑
 
 ## 검증/확인 대기중
+- (없음)
 
 ## 완료됨
 
