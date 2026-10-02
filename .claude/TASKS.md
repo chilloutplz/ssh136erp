@@ -4,39 +4,10 @@
 
 ## 지금 할 일 (In Progress / To Do)
 
-- [ ] **신규 기능 - 제품메뉴얼 그룹 (DB + API)**
-  - 테이블: `product_manuals` (id, product_name, manual_url, sort_order, created_at, created_by)
-  - API:
-    - `GET /api/product-manuals` 목록 조회
-    - `POST /api/product-manuals` 생성
-    - `DELETE /api/product-manuals/{id}` 삭제
-  - 유효성 검사:
-    - manual_url은 https:// 로 시작
-    - product_name 중복 불가
-    - URL 형식 유효성 검사
-  - 확인: 마이그레이션 후 DB 테이블 생성 여부
-
-- [ ] **신규 기능 - 제품메뉴얼 그룹 (Frontend - 사이드 메뉴)**
-  - 사이드 메뉴에 `제품메뉴얼` 그룹 추가 (아이콘: book)
-  - DB에서 불러온 제품이름 리스트 렌더링 (sort_order 순)
-  - 클릭 시 `window.open(manual_url, '_blank')` 외부 새창 열림
-  - 데이터 없을 때 `등록된 메뉴얼이 없습니다` 표시
-  - 초기 데이터 예시:
-    - 전어 미나리 가이드: `https://seasonal-jeoneo-minari-guide.challoo.chatgpt.site/#order`
-    - 새우 가이드: `https://seasonal-shrimp-guide.challoo.chatgpt.site/`
-    - 치킨난반 가이드: `https://chicken-nanban-guide.challoo.chatgpt.site/`
-
-- [ ] **신규 기능 - 제품메뉴얼 그룹 (Frontend - 등록 팝업)**
-  - 사이드 메뉴 그룹 옆 `+` 버튼 또는 설정 페이지에 `추가` 버튼
-  - 팝업 구성: 제품 이름 input, 링크 input
-  - 저장 시 API 호출, 성공하면 사이드 메뉴 즉시 갱신 (invalidate query)
-  - 권한: 관리자만 추가/삭제 가능
-  - 삭제: 각 아이템 옆 휴지통 아이콘, confirm 후 삭제
-
 - [ ] **일일매출, 기간매출 데이터 로딩 표시 추가**
   - 현상: 일일매출/기간매출 조회 시 데이터 로딩 중인지 구분이 안 돼서 빈 화면으로 보임
   - 할 일: frontend 대시보드 - 일일 요약 카드, 기간매출 차트/테이블에 loading spinner 또는 skeleton UI 추가, API 호출 중 isLoading 상태 관리
-  - 확인 위치: `backend/sales` 집계 API 호출 구간, `frontend/src/views/Dashboard.vue` 또는 해당 컴포넌트
+  - 확인 위치: `backend/sales` 집계 API 호출 구간, `frontend/src/views/DashboardView.vue` / `PeriodSalesView.vue`
 
 - [ ] **matepos 할인값 매칭 추가**
   - 현상: tosspos는 discounts 합산해서 channel_discount에 넣는데, matepos는 0으로 비어있음
@@ -47,6 +18,9 @@
 
 ## 완료됨
 
+- [x] 2026-10-02 — 제품메뉴얼 그룹 (DB + API): `manuals.ProductManual`, `GET/POST /api/product-manuals/`, `DELETE /api/product-manuals/<id>/`, https 검증·이름 중복 불가, 시드 3건, migrate 적용 확인
+- [x] 2026-10-02 — 제품메뉴얼 그룹 (Frontend - 사이드 메뉴): 매출/매입 아래 제품메뉴얼 목록, 클릭 시 새 창, 빈 목록 안내, 그룹 라벨 색 구분
+- [x] 2026-10-02 — 제품메뉴얼 그룹 (Frontend - 등록 팝업): `+` 추가 팝업, 목록 즉시 갱신, 항목별 삭제(confirm)
 - [x] 2026-09 — Phase 1 매출 집계 기능 전체 완료 (matepos/tosspos 백필, 웹훅, 대시보드)
 - [x] 2026-09-30 — tosspos API 인증 스킴 실제 발급 키로 검증 완료 (`test_toss_auth.py` 실행, `resultType=SUCCESS` 확인)
 - [x] 2026-09-30 — `order_category` 분류 버그 수정: `source`가 `POS` 단독 비교였던 것을 `POS`/`TABLE_ORDER`/`KIOSK`(오프라인 소스 집합) 기준으로 변경 (`backend/integrations/tosspos/mapper.py`)
