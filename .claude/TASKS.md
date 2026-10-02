@@ -4,17 +4,16 @@
 
 ## 지금 할 일 (In Progress / To Do)
 
-- [ ] **일일매출, 기간매출 데이터 로딩 표시 추가**
-  - 현상: 일일매출/기간매출 조회 시 데이터 로딩 중인지 구분이 안 돼서 빈 화면으로 보임
-  - 할 일: frontend 대시보드 - 일일 요약 카드, 기간매출 차트/테이블에 loading spinner 또는 skeleton UI 추가, API 호출 중 isLoading 상태 관리
-  - 확인 위치: `backend/sales` 집계 API 호출 구간, `frontend/src/views/DashboardView.vue` / `PeriodSalesView.vue`
-
 - [ ] **matepos 할인값 매칭 추가**
   - 현상: tosspos는 discounts 합산해서 channel_discount에 넣는데, matepos는 0으로 비어있음
   - 할 일: matepos raw_data에서 할인 필드 찾아서 discount_amount / channel_discount에 매핑
 
 ## 검증/확인 대기중
-- (없음)
+
+- [ ] **일일매출, 기간매출 데이터 로딩 표시 추가**
+  - 구현: DashboardView / PeriodSalesView — 조회 중 스피너 패널, 새로고침 버튼 disabled
+  - 확인: 날짜 변경·새로고침 시 "불러오는 중" 스피너가 보이고, 완료 후 카드/목록 표시
+  - 브랜치/PR: `feat/sales-loading-ui`
 
 ## 완료됨
 
