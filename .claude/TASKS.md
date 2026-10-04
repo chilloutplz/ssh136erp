@@ -4,6 +4,16 @@
 
 ## 지금 할 일 (In Progress / To Do)
 
+- [ ] **주문 취소 SaleCancel 테이블 (grok/feat/sale-cancel-table)**
+  - 모델: `SaleCancel` (원 Sale FK, channel_order_no, cancel_amount, process_note, is_read)
+  - 유니크: `(source, store_code, channel_order_no, cancelled_at)` — 충돌 시 process_note
+  - 원주문 미매칭: `sale=null` + process_note, 원 Sale 있으면 `payment_status=결제취소`
+  - API: `GET /api/sales/summary/cancel/`, `GET /api/sales/cancels/notes/`, `PATCH /api/sales/cancels/<id>/read/`
+  - tosspos cancelled.v1 / matepos cancelYn(bulk 시 serializer) → SaleCancel
+  - 프론트: AppShell 알림 벨, 일일매출 취소 카드, 주문상세 취소 이력
+  - 배포: cloudtype 브랜치 `grok/feat/sale-cancel-table` + `python manage.py migrate` (0004)
+  - 확인: 실웹훅 취소 1건, summary/cancel, 벨 process_note
+
 - [ ] **matepos 할인값 매칭 추가**
   - 현상: tosspos는 discounts 합산해서 channel_discount에 넣는데, matepos는 0으로 비어있음
   - 할 일: matepos raw_data에서 할인 필드 찾아서 discount_amount / channel_discount에 매핑
