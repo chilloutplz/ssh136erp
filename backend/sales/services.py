@@ -79,7 +79,6 @@ def find_original_sale(
     return None
 
 
-@transaction.atomic
 def record_sale_cancel(
     *,
     source: str,
@@ -104,75 +103,78 @@ def record_sale_cancel(
     biz_date = _parse_business_date(business_date, cancelled_dt)
     process_note = ""
 
-    if sale is None:
-        sale = find_original_sale(
-            source=source,
-            store_code=store_code,
-            channel_order_no=channel_order_no or None,
-            order_seq=order_seq,
-        )
-
-    if sale is not None:
-        if sale.payment_status != Sale.PaymentStatus.CANCELLED:
-            sale.payment_status = Sale.PaymentStatus.CANCELLED
-            sale.save(update_fields=["payment_status", "updated_at"])
-        if cancel_amount is None:
-            cancel_amount = int(sale.actual_sale_amount or 0)
-        if not channel_order_no and sale.channel_order_no:
-            channel_order_no = sale.channel_order_no
-        if biz_date is None and sale.business_date:
-            biz_date = sale.business_date
-    else:
-        process_note = (
-            f"원주문 미매칭: source={source} store={store_code} "
-            f"channel_order_no={channel_order_no or '-'} order_seq={order_seq or '-'}"
-        )
-        if cancel_amount is None:
-            cancel_amount = 0
-        logger.warning("SaleCancel 원주문 미매칭: %s", process_note)
-
-    try:
-        cancel = SaleCancel.objects.create(
-            sale=sale,
-            source=source,
-            store_code=store_code,
-            channel_order_no=channel_order_no,
-            cancelled_at=cancelled_dt,
-            cancel_reason=cancel_reason or "",
-            cancel_amount=int(cancel_amount or 0),
-            business_date=biz_date,
-            process_note=process_note,
-            is_read=False,
-            raw_data=raw_data,
-        )
-        return cancel
-    except IntegrityError:
-        existing = (
-            SaleCancel.objects.filter(
+    with transaction.atomic():
+        if sale is None:
+            sale = find_original_sale(
                 source=source,
                 store_code=store_code,
-                channel_order_no=channel_order_no,
-                cancelled_at=cancelled_dt,
+                channel_order_no=channel_order_no or None,
+                order_seq=order_seq,
             )
-            .order_by("-id")
-            .first()
-        )
-        conflict_msg = (
-            f"유니크 충돌: 동일 취소 재수신 "
-            f"({source}/{store_code}/{channel_order_no}/{cancelled_dt.isoformat()})"
-        )
-        if existing is None:
-            logger.error("SaleCancel IntegrityError but no existing row: %s", conflict_msg)
-            raise
-        notes = [n for n in (existing.process_note, conflict_msg) if n]
-        existing.process_note = "\n".join(notes)
-        existing.is_read = False
-        if sale is not None and existing.sale_id is None:
-            existing.sale = sale
-        if cancel_reason and not existing.cancel_reason:
-            existing.cancel_reason = cancel_reason
-        existing.save(
-            update_fields=["process_note", "is_read", "sale", "cancel_reason", "updated_at"]
-        )
-        logger.info("SaleCancel 유니크 충돌 처리: id=%s %s", existing.id, conflict_msg)
-        return existing
+
+        if sale is not None:
+            if sale.payment_status != Sale.PaymentStatus.CANCELLED:
+                sale.payment_status = Sale.PaymentStatus.CANCELLED
+                sale.save(update_fields=["payment_status", "updated_at"])
+            if cancel_amount is None:
+                cancel_amount = int(sale.actual_sale_amount or 0)
+            if not channel_order_no and sale.channel_order_no:
+                channel_order_no = sale.channel_order_no
+            if biz_date is None and sale.business_date:
+                biz_date = sale.business_date
+        else:
+            process_note = (
+                f"원주문 미매칭: source={source} store={store_code} "
+                f"channel_order_no={channel_order_no or '-'} order_seq={order_seq or '-'}"
+            )
+            if cancel_amount is None:
+                cancel_amount = 0
+            logger.warning("SaleCancel 원주문 미매칭: %s", process_note)
+
+        try:
+            # 중첩 atomic = savepoint. IntegrityError 시 바깥 트랜잭션 유지
+            with transaction.atomic():
+                cancel = SaleCancel.objects.create(
+                    sale=sale,
+                    source=source,
+                    store_code=store_code,
+                    channel_order_no=channel_order_no,
+                    cancelled_at=cancelled_dt,
+                    cancel_reason=cancel_reason or "",
+                    cancel_amount=int(cancel_amount or 0),
+                    business_date=biz_date,
+                    process_note=process_note,
+                    is_read=False,
+                    raw_data=raw_data,
+                )
+            return cancel
+        except IntegrityError:
+            existing = (
+                SaleCancel.objects.filter(
+                    source=source,
+                    store_code=store_code,
+                    channel_order_no=channel_order_no,
+                    cancelled_at=cancelled_dt,
+                )
+                .order_by("-id")
+                .first()
+            )
+            conflict_msg = (
+                f"유니크 충돌: 동일 취소 재수신 "
+                f"({source}/{store_code}/{channel_order_no}/{cancelled_dt.isoformat()})"
+            )
+            if existing is None:
+                logger.error("SaleCancel IntegrityError but no existing row: %s", conflict_msg)
+                raise
+            notes = [n for n in (existing.process_note, conflict_msg) if n]
+            existing.process_note = "\n".join(notes)
+            existing.is_read = False
+            if sale is not None and existing.sale_id is None:
+                existing.sale = sale
+            if cancel_reason and not existing.cancel_reason:
+                existing.cancel_reason = cancel_reason
+            existing.save(
+                update_fields=["process_note", "is_read", "sale", "cancel_reason", "updated_at"]
+            )
+            logger.info("SaleCancel 유니크 충돌 처리: id=%s %s", existing.id, conflict_msg)
+            return existing
