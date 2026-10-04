@@ -8,8 +8,13 @@ from rest_framework.views import APIView
 
 from common.permissions import HasInternalAPIKey
 
-from .models import Sale
-from .serializers import SaleDetailSerializer, SaleListSerializer, SaleSerializer
+from .models import Sale, SaleCancel
+from .serializers import (
+    SaleCancelSerializer,
+    SaleDetailSerializer,
+    SaleListSerializer,
+    SaleSerializer,
+)
 
 
 class SaleBulkCreateView(APIView):
@@ -58,6 +63,27 @@ def _filtered_sales(request, exclude_cancelled=False):
         qs = qs.filter(store_code=store_code)
     if source:
         qs = qs.filter(source=source)
+    if date_from:
+        qs = qs.filter(business_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(business_date__lte=date_to)
+    return qs
+
+
+def _filtered_cancels(request):
+    qs = SaleCancel.objects.all()
+    store_code = request.query_params.get("store_code")
+    source = request.query_params.get("source")
+    date_from = request.query_params.get("business_date_from")
+    date_to = request.query_params.get("business_date_to")
+    target_date = request.query_params.get("date")
+
+    if store_code:
+        qs = qs.filter(store_code=store_code)
+    if source:
+        qs = qs.filter(source=source)
+    if target_date:
+        qs = qs.filter(business_date=target_date)
     if date_from:
         qs = qs.filter(business_date__gte=date_from)
     if date_to:
@@ -132,7 +158,6 @@ class SaleDiscountSummaryView(APIView):
         qs = _filtered_sales(request, exclude_cancelled=True).filter(
             business_date=target_date
         )
-        # Count(..., filter=Q(...)) 는 일부 환경에서 500을 유발할 수 있어 분리 집계
         discount_amount = qs.aggregate(s=Sum("discount_amount"))["s"] or 0
         discount_order_count = qs.filter(discount_amount__gt=0).count()
         return Response(
@@ -142,6 +167,69 @@ class SaleDiscountSummaryView(APIView):
                 "date": target_date,
             }
         )
+
+
+class SaleCancelSummaryView(APIView):
+    """
+    GET /api/sales/summary/cancel/?store_code=&date=YYYY-MM-DD
+    특정 날짜(기본값 오늘) 취소 건수·합계 금액.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        target_date = request.query_params.get("date") or date.today().isoformat()
+        qs = _filtered_cancels(request)
+        if not request.query_params.get("date") and not request.query_params.get(
+            "business_date_from"
+        ):
+            qs = qs.filter(business_date=target_date)
+        agg = qs.aggregate(
+            cancel_count=Count("id"),
+            cancel_amount=Sum("cancel_amount"),
+        )
+        return Response(
+            {
+                "cancel_count": agg["cancel_count"] or 0,
+                "cancel_amount": agg["cancel_amount"] or 0,
+                "date": target_date,
+            }
+        )
+
+
+class SaleCancelNotesView(APIView):
+    """
+    GET /api/sales/cancels/notes/?unread=1
+    process_note 가 있는 취소 알림 목록 (프론트 벨 드롭다운).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = SaleCancel.objects.exclude(process_note="").order_by("-created_at", "-id")
+        unread = request.query_params.get("unread")
+        if unread in ("1", "true", "True"):
+            qs = qs.filter(is_read=False)
+        qs = qs[:100]
+        return Response(SaleCancelSerializer(qs, many=True).data)
+
+
+class SaleCancelMarkReadView(APIView):
+    """
+    PATCH /api/sales/cancels/<id>/read/
+    알림 읽음 처리.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            cancel = SaleCancel.objects.get(pk=pk)
+        except SaleCancel.DoesNotExist:
+            return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        cancel.is_read = True
+        cancel.save(update_fields=["is_read", "updated_at"])
+        return Response(SaleCancelSerializer(cancel).data)
 
 
 class SaleDailySummaryView(APIView):

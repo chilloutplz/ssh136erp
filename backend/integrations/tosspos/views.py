@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from integrations.models import WebhookEventLog
 from sales.models import Sale
 from sales.serializers import SaleSerializer
+from sales.services import record_sale_cancel
 
 from .client import TossPlaceAPIError, TossPlaceClient
 from .mapper import map_order
@@ -32,7 +33,7 @@ class TossPosWebhookView(APIView):
     - created: payload order 스냅샷 저장
     - opened: Open API 단건 조회로 품목 갱신 (추가 주문 반영)
     - payment: 웹훅 payment 로 tender 반영 (기존)
-    - completed/cancelled: 상태만 갱신 (기존)
+    - completed/cancelled: 상태만 갱신 (기존) + cancelled 시 SaleCancel 기록
     """
 
     parser_classes = [JSONParser]
@@ -148,13 +149,42 @@ class TossPosWebhookView(APIView):
     def _sync_order_state_only(self, data: dict, event_type: str) -> None:
         order_id = data.get("orderId")
 
-        # 추가 주문 등 opened → 품목 재조회
         if event_type.endswith("opened.v1"):
             self._sync_order_or_raise(order_id)
             return
 
         if event_type.endswith("completed.v1"):
             self._sync_order_or_raise(order_id)
+            return
+
+        if event_type.endswith("cancelled.v1"):
+            sale = self._find_sale(order_id)
+            cancel_reason = (
+                data.get("cancelReason")
+                or data.get("cancelledReason")
+                or data.get("reason")
+                or ""
+            )
+            cancelled_at = (
+                data.get("cancelledAt")
+                or data.get("canceledAt")
+                or timezone.now()
+            )
+            cancel_amount = data.get("cancelAmount")
+            if cancel_amount is None and sale is not None:
+                cancel_amount = sale.actual_sale_amount
+            record_sale_cancel(
+                source=Sale.Source.TOSSPOS,
+                store_code=TOSSPOS_STORE_CODE,
+                channel_order_no=(sale.channel_order_no if sale else None),
+                order_seq=str(order_id) if order_id else None,
+                cancelled_at=cancelled_at,
+                cancel_reason=str(cancel_reason or ""),
+                cancel_amount=int(cancel_amount or 0),
+                business_date=sale.business_date if sale else None,
+                raw_data=data,
+                sale=sale,
+            )
             return
 
         sale = self._find_sale(order_id)
@@ -166,18 +196,11 @@ class TossPosWebhookView(APIView):
             )
             return
 
-        if event_type.endswith("cancelled.v1"):
-            sale.payment_status = Sale.PaymentStatus.CANCELLED
-        else:
-            logger.info("tosspos webhook: 처리하지 않는 슬림 이벤트 - %s", event_type)
-            return
-
-        sale.save(update_fields=["payment_status", "sold_at", "updated_at"])
+        logger.info("tosspos webhook: 처리하지 않는 슬림 이벤트 - %s", event_type)
 
     def _sync_payment(self, payment: dict) -> None:
         order_id = payment.get("orderId")
         # payment payload만 갱신하지 않고 전체 주문을 다시 조회한다.
-        # 결제 직전에 발생한 추가 품목과 최종 chargePrice를 함께 반영한다.
         self._sync_order_or_raise(order_id)
 
 
