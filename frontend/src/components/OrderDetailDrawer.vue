@@ -36,6 +36,21 @@ function formatWon(n) {
   return `₩${Number(n || 0).toLocaleString("ko-KR")}`;
 }
 
+function formatDateTime(iso) {
+  if (!iso) return "-";
+  try {
+    return new Date(iso).toLocaleString("ko-KR", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return String(iso);
+  }
+}
+
 function optionLabel(opt) {
   if (opt == null) return "";
   if (typeof opt === "string") return opt;
@@ -151,6 +166,21 @@ function statusTagClass(status) {
             <span class="amt mono">{{ formatWon(t.tender_amt) }}</span>
           </li>
         </ul>
+
+        <template v-if="sale.cancels?.length">
+          <hr class="hairline" />
+          <p class="section-label">취소 이력</p>
+          <ul class="cancel-list">
+            <li v-for="c in sale.cancels" :key="c.id" class="cancel-item">
+              <div class="cancel-row">
+                <span>{{ formatDateTime(c.cancelled_at) }}</span>
+                <span class="mono">{{ formatWon(c.cancel_amount) }}</span>
+              </div>
+              <p v-if="c.cancel_reason" class="cancel-reason">{{ c.cancel_reason }}</p>
+              <p v-if="c.process_note" class="cancel-note">{{ c.process_note }}</p>
+            </li>
+          </ul>
+        </template>
       </template>
     </aside>
   </div>
@@ -398,6 +428,13 @@ function statusTagClass(status) {
   font-size: 16px;
   padding-top: 8px;
 }
+
+.cancel-list { list-style: none; margin: 0; padding: 0; }
+.cancel-item { padding: 10px 0; border-bottom: 1px solid var(--paper-dim, #f1f5f9); }
+.cancel-item:last-child { border-bottom: 0; }
+.cancel-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.cancel-reason { margin: 6px 0 0; font-size: 13px; color: var(--ink); }
+.cancel-note { margin: 4px 0 0; font-size: 12px; color: #b91c1c; white-space: pre-wrap; }
 </style>
 
 

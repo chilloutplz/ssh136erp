@@ -26,6 +26,7 @@ function readStoredDate() {
 const selectedDate = ref(readStoredDate());
 const today = ref(null);
 const discount = ref({ discount_amount: 0, discount_order_count: 0 });
+const cancelSummary = ref({ cancel_count: 0, cancel_amount: 0 });
 const channels = ref([]);
 const orders = ref([]);
 const loading = ref(true);
@@ -108,18 +109,20 @@ async function loadAll() {
   loading.value = true;
   error.value = "";
   try {
-    const [todayRes, channelRes, ordersRes, discountRes] = await Promise.all([
+    const [todayRes, channelRes, ordersRes, discountRes, cancelRes] = await Promise.all([
       client.get("/sales/summary/today/", { params: { date: selectedDate.value } }),
       client.get("/sales/summary/by-channel/", { params: { date: selectedDate.value } }),
       client.get("/sales/", {
         params: { business_date_from: selectedDate.value, business_date_to: selectedDate.value },
       }),
       client.get("/sales/summary/discount/", { params: { date: selectedDate.value } }),
+      client.get("/sales/summary/cancel/", { params: { date: selectedDate.value } }),
     ]);
     today.value = todayRes.data;
     channels.value = channelRes.data;
     orders.value = ordersRes.data;
     discount.value = discountRes.data;
+    cancelSummary.value = cancelRes.data || { cancel_count: 0, cancel_amount: 0 };
   } catch (e) {
     error.value = "데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
   } finally {
@@ -197,6 +200,13 @@ onMounted(async () => {
               <span class="card-label">{{ discount.discount_order_count }}건</span>
             </div>
             <span class="card-amount mono">{{ formatWon(discount.discount_amount) }}</span>
+          </div>
+          <div class="summary-card">
+            <div class="order-row">
+              <span class="card-label title-cancel">취소</span>
+              <span class="card-label">{{ cancelSummary.cancel_count }}건</span>
+            </div>
+            <span class="card-amount mono">{{ formatWon(cancelSummary.cancel_amount) }}</span>
           </div>
           <div class="summary-card">
             <div class="order-row">
@@ -305,9 +315,10 @@ h1 { margin: 0; font-size: 24px; font-weight: 700; }
 .tag.ledger { background: var(--ledger-bg); color: var(--ledger); }
 .tag.stamp { background: var(--stamp-bg); color: var(--stamp); }
 .tag.pending { background: var(--paper-dim); color: var(--muted); }
-.card-label.title-order, .card-label.title-discount, .card-label.title-dinein, .card-label.title-delivery { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; color: var(--ink-soft); }
+.card-label.title-order, .card-label.title-discount, .card-label.title-cancel, .card-label.title-dinein, .card-label.title-delivery { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; color: var(--ink-soft); }
 .card-label.title-order { background: #dbeafe; }
 .card-label.title-discount { background: #fee2e2; }
+.card-label.title-cancel { background: #fce7f3; color: #9d174d; }
 .card-label.title-dinein { background: #d6ebff; }
 .card-label.title-delivery { background: #d4f5f1; }
 .order-table .channel-hl { font-size: 12px; font-weight: 700; }
