@@ -132,3 +132,53 @@ class SaleTender(models.Model):
 
     def __str__(self):
         return f"{self.tender_nm} {self.tender_amt}"
+
+
+class SaleCancel(models.Model):
+    """
+    주문 취소 이벤트.
+    원 Sale 행과 분리해 저장하며, channel_order_no 로 원주문을 연결한다.
+    부분 취소는 cancel_amount 로 구분한다.
+    """
+
+    sale = models.ForeignKey(
+        Sale,
+        related_name="cancels",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    source = models.CharField(max_length=20)
+    store_code = models.CharField(max_length=50)
+    channel_order_no = models.CharField(max_length=100, blank=True, default="")
+    cancelled_at = models.DateTimeField()
+    cancel_reason = models.TextField(blank=True, default="")
+    cancel_amount = models.BigIntegerField(default=0)
+    business_date = models.DateField(null=True, blank=True)
+    process_note = models.TextField(
+        blank=True,
+        default="",
+        help_text="원주문 미매칭·유니크 충돌 등 처리 메시지 (프론트 알림용)",
+    )
+    is_read = models.BooleanField(default=False)
+    raw_data = models.JSONField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "store_code", "channel_order_no", "cancelled_at"],
+                name="uniq_salecancel_source_store_orderno_cancelledat",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["business_date"]),
+            models.Index(fields=["is_read", "-created_at"]),
+            models.Index(fields=["source", "store_code", "channel_order_no"]),
+        ]
+        ordering = ["-cancelled_at", "-id"]
+
+    def __str__(self):
+        return f"[{self.source}] cancel {self.channel_order_no} @ {self.cancelled_at}"
