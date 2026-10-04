@@ -2,9 +2,15 @@
 
 ## 프로젝트 개요
 
-- 숙성회136 (인천 송도) 단일 매장을 위한 풀스택 ERP
-- 1차 목적: matepos → tosspos로 이어지는 두 POS 시스템의 매출 데이터를 하나의 스키마로 통합
-- 향후: 구매 / 원가 / BOM 관리로 확장 예정
+- TossPOS를 사용하는 매장을 위한 풀스택 ERP
+- 1차: matepos → tosspos로 이어지는 두 POS 시스템의 매출 데이터를 하나의 스키마로 통합
+- 2차: tossposs webhook 데이터를 DB에 반영 실시간 매출현황 파악
+- 3차: 거래명세서 파싱으로 매입데이터 DB화
+- 4차: 매출, 매입 비교 dashboard
+- 5차: BOM 구성
+- 6차: 매출 품목에 BOM 원가 병기
+- 7차: 배달플랫폼 정산 데이터 DB화
+- 8차: 매출 품목에 BOM 원가, 플랫폼 비용 병기
 
 ## 스택
 
@@ -16,9 +22,9 @@
 
 ## 관련 문서
 
-- @REQUIREMENTS.md — 요구사항, 데이터 모델, Phase별 범위
+<!-- - @REQUIREMENTS.md — 요구사항, 데이터 모델, Phase별 범위 -->
 - @TASKS.md — 지금 해야 할 일 체크리스트
-- @backend/integrations/tosspos/API_NOTES.md — tosspos Open API 필드/enum 참조 (source, orderState, diningOption, paymentMethod 등). tosspos 관련 필드값을 다룰 때는 이 파일부터 확인할 것
+- @API_NOTES.md — tosspos Open API 필드/enum 참조 (source, orderState, diningOption, paymentMethod 등). tosspos 관련 필드값을 다룰 때는 이 파일부터 확인할 것
 
 ## 절대 규칙 (Hard Rules)
 
