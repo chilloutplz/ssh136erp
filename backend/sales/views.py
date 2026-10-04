@@ -1,6 +1,6 @@
 from datetime import date
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Sum
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -92,11 +92,6 @@ def _filtered_cancels(request):
 
 
 class SaleListView(APIView):
-    """
-    GET /api/sales/?business_date_from=&business_date_to=&store_code=&source=
-    프론트엔드(Vue3) 대시보드 - 주문 목록.
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -105,27 +100,17 @@ class SaleListView(APIView):
 
 
 class SaleDetailView(APIView):
-    """
-    GET /api/sales/<id>/
-    주문 목록 클릭 시 보여줄 상세 내역 (품목/결제수단 포함).
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         try:
-            sale = Sale.objects.prefetch_related("items", "tenders").get(pk=pk)
+            sale = Sale.objects.prefetch_related("items", "tenders", "cancels").get(pk=pk)
         except Sale.DoesNotExist:
             return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
         return Response(SaleDetailSerializer(sale).data)
 
 
 class SaleTodaySummaryView(APIView):
-    """
-    GET /api/sales/summary/today/?store_code=&date=YYYY-MM-DD
-    화면 상단 카드: 특정 날짜(기본값 오늘) 매출 합계 + 건수.
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -146,11 +131,6 @@ class SaleTodaySummaryView(APIView):
 
 
 class SaleDiscountSummaryView(APIView):
-    """
-    GET /api/sales/summary/discount/?store_code=&date=YYYY-MM-DD
-    특정 날짜의 할인 금액과 할인 적용 주문 건수.
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -170,11 +150,6 @@ class SaleDiscountSummaryView(APIView):
 
 
 class SaleCancelSummaryView(APIView):
-    """
-    GET /api/sales/summary/cancel/?store_code=&date=YYYY-MM-DD
-    특정 날짜(기본값 오늘) 취소 건수·합계 금액.
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -198,11 +173,6 @@ class SaleCancelSummaryView(APIView):
 
 
 class SaleCancelNotesView(APIView):
-    """
-    GET /api/sales/cancels/notes/?unread=1
-    process_note 가 있는 취소 알림 목록 (프론트 벨 드롭다운).
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -215,11 +185,6 @@ class SaleCancelNotesView(APIView):
 
 
 class SaleCancelMarkReadView(APIView):
-    """
-    PATCH /api/sales/cancels/<id>/read/
-    알림 읽음 처리.
-    """
-
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk):
@@ -233,11 +198,6 @@ class SaleCancelMarkReadView(APIView):
 
 
 class SaleDailySummaryView(APIView):
-    """
-    GET /api/sales/summary/daily/?store_code=&business_date_from=&business_date_to=
-    일자별 매출 합계 (추이 그래프용)
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -256,12 +216,6 @@ class SaleDailySummaryView(APIView):
 
 
 class SaleChannelSummaryView(APIView):
-    """
-    GET /api/sales/summary/by-channel/?date=YYYY-MM-DD
-    특정 날짜(기본값 오늘)의 채널별 주문금액/건수.
-    business_date_from/to 를 명시하면 그 구간 전체로 집계.
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

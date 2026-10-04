@@ -17,6 +17,29 @@ class SaleTenderSerializer(serializers.ModelSerializer):
         exclude = ["id", "sale"]
 
 
+class SaleCancelSerializer(serializers.ModelSerializer):
+    """취소 이벤트 조회용 (알림·상세)."""
+
+    class Meta:
+        model = SaleCancel
+        fields = [
+            "id",
+            "sale",
+            "source",
+            "store_code",
+            "channel_order_no",
+            "cancelled_at",
+            "cancel_reason",
+            "cancel_amount",
+            "business_date",
+            "process_note",
+            "is_read",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
 class SaleSerializer(serializers.ModelSerializer):
     """
     matepos.py 의 push_to_django() 가 보내는 record 구조(map_sale 결과)와
@@ -31,8 +54,6 @@ class SaleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = "__all__"
-        # source + store_code + business_date + order_seq 조합은 create()에서
-        # update_or_create()로 처리하므로 DRF의 사전 유일성 검증을 끈다.
         validators = []
 
     @transaction.atomic
@@ -118,34 +139,12 @@ class SaleListSerializer(serializers.ModelSerializer):
 
 
 class SaleDetailSerializer(serializers.ModelSerializer):
-    """주문 상세 조회용 (읽기 전용). 품목/결제수단을 함께 내려준다."""
+    """주문 상세 조회용 (읽기 전용). 품목/결제수단/취소 이력을 함께 내려준다."""
 
     items = SaleItemSerializer(many=True, read_only=True)
     tenders = SaleTenderSerializer(many=True, read_only=True)
+    cancels = SaleCancelSerializer(many=True, read_only=True)
 
     class Meta:
         model = Sale
         fields = "__all__"
-
-
-class SaleCancelSerializer(serializers.ModelSerializer):
-    """취소 이벤트 조회용 (알림·상세)."""
-
-    class Meta:
-        model = SaleCancel
-        fields = [
-            "id",
-            "sale",
-            "source",
-            "store_code",
-            "channel_order_no",
-            "cancelled_at",
-            "cancel_reason",
-            "cancel_amount",
-            "business_date",
-            "process_note",
-            "is_read",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = fields
