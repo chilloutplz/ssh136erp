@@ -91,3 +91,20 @@
 - **수정 (2026-09-30)**: `order.*`는 `data.get("order")`만, `payment.*`는 `data.get("order") or data.get("payment", {}).get("order")`만 사용하도록 fallback 제거. `order`가 없으면 `if not order: return`으로 조용히 스킵.
 - 같은 패턴으로 생긴 가짜 레코드가 더 있는지 의심되면 `Sale.objects.filter(order_seq="None")`으로 확인할 것.
 
+## 주문 취소(SaleCancel) 백필 — matepos / tosspos
+
+matepos와 tosspos는 취소를 완전히 다른 방식으로 기록해서, 백필 로직도 다르게 짰다.
+
+### matepos — "원주문 + 별도 음수 거래" 구조
+
+- matepos는 취소/반품을 원주문과 별개의 **음수 금액 거래 행**으로 쌓는다 (같은 `channel_order_no`로 원주문과 짝을 이룸).
+- 2024-03-01~2026-05-20 백필 구간에서 28건 발견. **28건 전부 `cancelYn=N`, `returnYn=Y`, `cancelReason`/`cancelReasonCd` 전부 `null`.**
+- 즉 POS가 배달플랫폼 취소 이벤트를 받을 때 **"취소"와 "반품"을 구분하지 않고 항상 반품(Y)으로만 기록하며, 사유도 전혀 안 남긴다.** 그래서 matepos 데이터로는 취소/반품 구분도, 사유 파악도 불가능 — 전부 동일하게 "취소"로 통일해서 `SaleCancel`에 기록하기로 결정.
+- `backfill_matepos_cancels` 커맨드로 처리: 원주문에 `결제취소` 표시 + `SaleCancel` 생성(`cancel_reason=""`) + 음수 거래 행은 삭제(SaleItem/SaleTender도 CASCADE로 함께 삭제).
+
+### tosspos — 같은 행의 `payment_status`를 직접 변경하는 구조
+
+- tosspos는 matepos와 달리 별도 음수 행을 만들지 않고, **원래 Sale 행 자체의 `payment_status`를 `결제취소`로 바꾸는 방식**. 삭제할 행이 없음.
+- `SaleCancel` 모델 도입 이전에 이미 `결제취소`로 처리된 과거 레코드(25건)는 감사 기록이 없어서, `backfill_tosspos_cancels` 커맨드로 추가 생성만 함.
+- `cancelled_at`/`cancel_reason`은 `Sale.raw_data`(저장된 Order 객체 원본)의 **`cancelledAt`/`cancelledReason`** 필드에서 직접 꺼낸다 (이건 Order 모델 자체 필드로, 웹훅 이벤트 payload의 `cancelledAt`과는 출처가 다름 — 둘 다 같은 키 이름이라 헷갈리지 않도록 주의).
+- 25건 중 24건은 `cancelledAt`이 정상적으로 채워져 있었음. 1건(id=19549, 2026-10-02, 내점(테이블) `테-002`)만 비어있었는데, 확인해보니 **테이블을 002→004로 이동하면서 002 주문이 취소되고 004에서 정상 매출로 재처리된 케이스** — 데이터 이상이 아니라 정상적인 운영 흐름. 이런 "`cancelledAt` 없는" 케이스는 `sold_at` → `business_date` 순으로 대체해서 채운다.
