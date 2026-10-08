@@ -186,7 +186,7 @@ class PurchaseUploadView(APIView):
         if not uploaded_file:
             return Response({"detail": "file 필드가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        purchase = Purchase.objects.create(file=uploaded_file, status=Purchase.Status.UPLOADED)
+        purchase = Purchase.objects.create(file=uploaded_file, status=Purchase.Status.PARSING)
 
         try:
             file_bytes = purchase.file.read()
@@ -365,6 +365,9 @@ class PurchaseReparseView(APIView):
                 {"detail": "원본 파일이 없습니다."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        purchase.status = Purchase.Status.PARSING
+        purchase.save(update_fields=["status"])
 
         try:
             purchase.file.open("rb")

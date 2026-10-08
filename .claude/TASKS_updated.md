@@ -4,23 +4,18 @@
 
 ## 지금 할 일 (In Progress / To Do)
 
-- [ ] **매입기능 구현 마무리** (Phase 2)
-  - 거래명세서(PDF/이미지) 파싱 결과 검토 및 확정 로직 마무리
-  - 자재/공급처 매칭 UI 및 마스터 데이터 관리 보완
+- [ ] matepos 백필 데이터 중 취소건을 SaleCancel 규칙에 맞게 정리 (claude 작업 — 브랜치 확정 후 진행)
 
 ## 검증/확인 대기중
 
 - [ ] **matepos 할인값 매칭 추가**
   - 현상: tosspos는 discounts 합산해서 channel_discount에 넣는데, matepos는 0으로 비어있음
   - 보류 사유: POS에 정확한 할인값이 들어오지 않음 — 배달플랫폼 정산데이터 연동 시점에 함께 정리 예정
-- [ ] **주문 취소 SaleCancel — 실시간 webhook 검증** (`grok/feat/sale-cancel-table`)
-  - matepos 백필(28건) / tosspos 백필(25건)은 완료 (아래 완료됨 참고)
-  - 다만 실제 webhook 취소 이벤트 수신 시 `record_sale_cancel()`이 라이브로 정상 동작하는지는 아직 미검증 — 실제 취소건 발생할 때까지 대기
+- [ ] **주문 취소 SaleCancel 테이블** (`grok/feat/sale-cancel-table`)
+  - 보류 사유: 실제 webhook 취소건 발생 및 처리 결과를 봐야 검증 가능 — 취소건 발생할 때까지 대기
 
 ## 완료됨
 
-- [x] 2026-10-04 — matepos 백필(2024-03-01~2026-05-20) 취소/반품 쌍 28건을 SaleCancel로 정리: 전부 `cancelYn=N`/`returnYn=Y`/사유 없음으로 확인돼 구분 없이 "취소"로 통일 처리. 원주문 결제취소 표시 + 음수거래 삭제. 커맨드: `backfill_matepos_cancels`
-- [x] 2026-10-04 — tosspos 기존 결제취소 Sale 25건에 누락된 SaleCancel 감사 기록 백필. `raw_data.cancelledAt`/`cancelledReason` 사용, 1건(id=19549, 테이블 002→004 이동)은 fallback(sold_at/business_date) 처리 — 정상 케이스로 확인. 커맨드: `backfill_tosspos_cancels`
 - [x] 2026-10-03 — 일일매출/기간매출 데이터 로딩 표시 추가 (`feat/sales-loading-ui`)
 - [x] 2026-10-02 — 제품메뉴얼 그룹 (DB + API): `manuals.ProductManual`, `GET/POST /api/product-manuals/`, `DELETE /api/product-manuals/<id>/`, https 검증·이름 중복 불가, 시드 3건, migrate 적용 확인
 - [x] 2026-10-02 — 제품메뉴얼 그룹 (Frontend - 사이드 메뉴): 매출/매입 아래 제품메뉴얼 목록, 클릭 시 새 창, 빈 목록 안내, 그룹 라벨 색 구분

@@ -1,7 +1,8 @@
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Sale, SaleItem, SaleTender
+from .models import Sale, SaleCancel, SaleItem, SaleTender
+from .services import record_sale_cancel
 
 
 class SaleItemSerializer(serializers.ModelSerializer):
@@ -16,11 +17,35 @@ class SaleTenderSerializer(serializers.ModelSerializer):
         exclude = ["id", "sale"]
 
 
+class SaleCancelSerializer(serializers.ModelSerializer):
+    """취소 이벤트 조회용 (알림·상세)."""
+
+    class Meta:
+        model = SaleCancel
+        fields = [
+            "id",
+            "sale",
+            "source",
+            "store_code",
+            "channel_order_no",
+            "cancelled_at",
+            "cancel_reason",
+            "cancel_amount",
+            "business_date",
+            "process_note",
+            "is_read",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
 class SaleSerializer(serializers.ModelSerializer):
     """
     matepos.py 의 push_to_django() 가 보내는 record 구조(map_sale 결과)와
     1:1로 매칭되는 시리얼라이저.
     items / tenders 를 함께 받아 중첩 생성한다.
+    payment_status=결제취소 이면 SaleCancel 도 함께 기록한다.
     """
 
     items = SaleItemSerializer(many=True, required=False, default=list)
@@ -29,10 +54,6 @@ class SaleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = "__all__"
-        # source + store_code + business_date + order_seq 조합은 create()에서
-        # update_or_create()로 처리하므로 DRF의 사전 유일성 검증을 끈다.
-        # 이 검증을 그대로 두면 create()에 도달하기 전에 기존 주문이
-        # "반드시 고유해야 합니다" 오류로 거부된다.
         validators = []
 
     @transaction.atomic
@@ -40,9 +61,6 @@ class SaleSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop("items", [])
         tenders_data = validated_data.pop("tenders", [])
 
-        # source + store_code + business_date + order_seq 기준 upsert.
-        # matepos 의 order_seq(trSeq)는 영업일마다 재사용되므로 business_date가 없으면
-        # 서로 다른 날짜의 주문이 같은 것으로 취급되어 덮어써진다 (DB 유니크 제약과 일치시켜야 함).
         lookup = {
             "source": validated_data.get("source"),
             "store_code": validated_data.get("store_code"),
@@ -61,6 +79,37 @@ class SaleSerializer(serializers.ModelSerializer):
         SaleTender.objects.bulk_create(
             [SaleTender(sale=sale, **tender) for tender in tenders_data]
         )
+
+        if sale.payment_status == Sale.PaymentStatus.CANCELLED:
+            raw = validated_data.get("raw_data") or sale.raw_data or {}
+            reason = ""
+            if isinstance(raw, dict):
+                reason = (
+                    raw.get("cancelReason")
+                    or raw.get("cancelledReason")
+                    or raw.get("memo")
+                    or ""
+                )
+            cancelled_at = sale.sold_at or sale.updated_at
+            if isinstance(raw, dict):
+                cancelled_at = (
+                    raw.get("cancelledAt")
+                    or raw.get("canceledAt")
+                    or cancelled_at
+                )
+            record_sale_cancel(
+                source=sale.source,
+                store_code=sale.store_code,
+                channel_order_no=sale.channel_order_no,
+                order_seq=sale.order_seq,
+                cancelled_at=cancelled_at,
+                cancel_reason=str(reason or ""),
+                cancel_amount=int(sale.actual_sale_amount or 0),
+                business_date=sale.business_date,
+                raw_data=raw if isinstance(raw, dict) else None,
+                sale=sale,
+            )
+
         return sale
 
 
@@ -90,10 +139,11 @@ class SaleListSerializer(serializers.ModelSerializer):
 
 
 class SaleDetailSerializer(serializers.ModelSerializer):
-    """주문 상세 조회용 (읽기 전용). 품목/결제수단을 함께 내려준다."""
+    """주문 상세 조회용 (읽기 전용). 품목/결제수단/취소 이력을 함께 내려준다."""
 
     items = SaleItemSerializer(many=True, read_only=True)
     tenders = SaleTenderSerializer(many=True, read_only=True)
+    cancels = SaleCancelSerializer(many=True, read_only=True)
 
     class Meta:
         model = Sale

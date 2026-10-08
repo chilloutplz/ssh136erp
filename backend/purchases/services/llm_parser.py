@@ -139,11 +139,7 @@ def parse_document(file_bytes: bytes, content_type: str) -> dict:
     if not settings.OPENROUTER_API_KEY:
         raise LLMParseError("OPENROUTER_API_KEY 가 설정되어 있지 않습니다.")
 
-    model = (settings.OPENROUTER_MODEL or "").strip()
-    if not model:
-        raise LLMParseError(
-            "OPENROUTER_MODEL 이 비어 있습니다. .env 에 vision 모델 id 를 설정하세요."
-        )
+    model = getattr(settings, "OPENROUTER_MODEL", "").strip()
 
     if content_type == "application/pdf" or (
         content_type and "pdf" in content_type.lower()

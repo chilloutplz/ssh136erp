@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import client from "../api/client";
 import { authState, logout } from "../stores/auth";
+import NotificationBell from "../components/NotificationBell.vue";
 
 const router = useRouter();
 const route = useRoute();
@@ -150,6 +151,9 @@ onMounted(loadManuals);
             <p class="eyebrow mono">ERP HOOK</p>
             <p class="brand-sub">숙성회136</p>
           </div>
+          <div class="brand-bell sidebar-variant">
+            <NotificationBell />
+          </div>
         </div>
         <div class="account-box">
           <p class="account-label">로그인 계정</p>
@@ -272,6 +276,9 @@ onMounted(loadManuals);
             <small>ERP HOOK</small>
           </div>
         </div>
+        <div class="mobile-bell">
+          <NotificationBell />
+        </div>
       </header>
       <router-view />
     </main>
@@ -330,10 +337,16 @@ onMounted(loadManuals);
 
 .brand-text {
   min-width: 0;
+  flex: 1;
 }
 
 .brand-text .brand-sub {
   margin: 2px 0 0;
+}
+
+.brand-bell {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .mobile-brand {
@@ -341,6 +354,7 @@ onMounted(loadManuals);
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1;
 }
 
 .mobile-logo {
@@ -351,6 +365,10 @@ onMounted(loadManuals);
   flex-shrink: 0;
 }
 
+.mobile-bell {
+  flex-shrink: 0;
+  margin-left: auto;
+}
 
 .nav {
   display: flex;
@@ -727,7 +745,6 @@ onMounted(loadManuals);
   gap: 2px;
 }
 
-/* 일일매출 nav-item 과 동일 톤 */
 .manual-link.nav-item {
   flex: 1;
   min-width: 0;

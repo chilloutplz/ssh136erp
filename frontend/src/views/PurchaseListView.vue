@@ -104,6 +104,20 @@ onMounted(load);
       </div>
     </header>
 
+    <div v-if="uploading" class="loading-overlay">
+      <div class="loading-box">
+        <div class="spinner"></div>
+        <p>거래명세서를 분석하고 있습니다.<br />잠시만 기다려주세요...</p>
+      </div>
+    </div>
+
+    <div v-if="uploading" class="loading-overlay">
+      <div class="loading-box">
+        <div class="spinner"></div>
+        <p>거래명세서를 분석하고 있습니다.<br />잠시만 기다려주세요...</p>
+      </div>
+    </div>
+
     <div v-if="uploadError" class="banner error">{{ uploadError }}</div>
     <div v-if="error" class="banner error">{{ error }}</div>
     <div v-if="unresolvedOnly && !loading && !purchases.length" class="banner ok">
@@ -282,6 +296,47 @@ h1 {
   background: var(--paper-dim);
   color: var(--muted);
   border: 1px dashed var(--rule-strong);
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-box {
+  background: #fff;
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.loading-box .spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f1f5f9;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+.loading-box p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>
 
