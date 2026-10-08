@@ -106,6 +106,7 @@ class Purchase(models.Model):
 
     class Status(models.TextChoices):
         UPLOADED = "UPLOADED", "업로드됨"
+        PARSING = "PARSING", "파싱중"
         PARSED = "PARSED", "파싱완료(검토대기)"
         CONFIRMED = "CONFIRMED", "확정"
         FAILED = "FAILED", "파싱실패"

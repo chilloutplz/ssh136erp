@@ -194,7 +194,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # 매입 전표 파싱용 LLM (OpenRouter)
 OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
-OPENROUTER_MODEL = config('OPENROUTER_MODEL', default='inclusionai/ling-3.0-flash-vl:free')
+OPENROUTER_MODEL = config('OPENROUTER_MODEL', default='google/gemini-flash-1.5-8b')
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
