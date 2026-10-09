@@ -100,9 +100,10 @@ def _build_user_payload(ocr: OCRResult) -> str:
 
 
 def _call_gemini(api_key: str, model: str, user_text: str) -> str:
+    # API 키는 쿼리보다 헤더 권장 (특수문자·길이 이슈 방지)
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={api_key}"
+        f"{model}:generateContent"
     )
     body = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
@@ -112,8 +113,12 @@ def _call_gemini(api_key: str, model: str, user_text: str) -> str:
             "responseMimeType": "application/json",
         },
     }
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
     try:
-        resp = httpx.post(url, json=body, timeout=90)
+        resp = httpx.post(url, headers=headers, json=body, timeout=90)
         resp.raise_for_status()
     except httpx.HTTPStatusError as e:
         raise StructureLLMError(
@@ -168,12 +173,12 @@ def _call_openrouter(api_key: str, model: str, user_text: str) -> str:
 def structure_to_json(ocr: OCRResult) -> dict:
     """OCR 결과를 거래명세 JSON dict 로 변환. _raw_response / _model / _vendor 메타 포함."""
     vendor = (getattr(settings, "STRUCTURE_LLM_VENDOR", "") or "gemini").strip().lower()
-    api_key = (getattr(settings, "STRUCTURE_LLM_API_KEY", "") or "").strip()
-    model = (getattr(settings, "STRUCTURE_LLM_MODEL", "") or "").strip()
+    api_key = (getattr(settings, "STRUCTURE_LLM_API_KEY", "") or "").strip().strip('"').strip("'")
+    model = (getattr(settings, "STRUCTURE_LLM_MODEL", "") or "").strip().strip('"').strip("'")
 
     # 하위 호환: STRUCTURE_* 비어 있으면 구 OPENROUTER_* 사용
     if not api_key and vendor == "openrouter":
-        api_key = (getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()
+        api_key = (getattr(settings, "OPENROUTER_API_KEY", "") or "").strip().strip('"').strip("'")
     if not model and vendor == "openrouter":
         model = (getattr(settings, "OPENROUTER_MODEL", "") or "").strip()
 
