@@ -19,3 +19,4 @@ gunicorn==23.0.0
 dj-database-url==3.0.1
 pymupdf==1.28.2
 Pillow==12.3.0
+google-cloud-vision==3.11.0

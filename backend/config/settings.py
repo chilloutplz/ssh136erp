@@ -33,8 +33,8 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # 프론트엔드(Vue3)가 별도 도메인/포트에서 서빙되므로 CORS 허용 필요.
 # 로컬 개발 기본값은 vite dev 서버(5173), 배포 시 .env 에 실제 frontend 도메인을 넣어줄 것.
 CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS', 
-    default='http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000', 
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000',
     cast=Csv()
 )
 
@@ -192,9 +192,23 @@ STORAGES = {
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# 매입 전표 파싱용 LLM (OpenRouter)
+# --- 매입 전표 파싱 ---
+# OCR: Google Cloud Vision
+# cloudtype: GOOGLE_VISION_CREDENTIALS_JSON 에 서비스 계정 JSON 전체
+# 로컬: GOOGLE_VISION_CREDENTIALS_FILE 에 키 파일 경로
+GOOGLE_VISION_CREDENTIALS_JSON = config('GOOGLE_VISION_CREDENTIALS_JSON', default='')
+GOOGLE_VISION_CREDENTIALS_FILE = config('GOOGLE_VISION_CREDENTIALS_FILE', default='')
+GOOGLE_APPLICATION_CREDENTIALS = config('GOOGLE_APPLICATION_CREDENTIALS', default='')
+
+# 구조화 LLM (vendor 교체 가능)
+# STRUCTURE_LLM_VENDOR=gemini | openrouter
+STRUCTURE_LLM_VENDOR = config('STRUCTURE_LLM_VENDOR', default='gemini')
+STRUCTURE_LLM_API_KEY = config('STRUCTURE_LLM_API_KEY', default='')
+STRUCTURE_LLM_MODEL = config('STRUCTURE_LLM_MODEL', default='gemini-2.0-flash')
+
+# 하위 호환 (openrouter 텍스트 구조화 또는 구설정)
 OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
-OPENROUTER_MODEL = config('OPENROUTER_MODEL', default='google/gemini-flash-1.5-8b')
+OPENROUTER_MODEL = config('OPENROUTER_MODEL', default='')
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
